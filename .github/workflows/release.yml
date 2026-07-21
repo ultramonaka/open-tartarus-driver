@@ -35,7 +35,7 @@ jobs:
           $stageDir = "tartarus_driver-$version-windows-x64"
           New-Item -ItemType Directory -Path $stageDir | Out-Null
           Copy-Item tartarus_driver/target/release/tartarus_driver.exe $stageDir/
-          Copy-Item README.md, USAGE.md, LICENSE, config.example.toml $stageDir/ -ErrorAction SilentlyContinue
+          Copy-Item README.md, USAGE.md, CHANGELOG.md, LICENSE, config.example.toml, run-tray.bat $stageDir/ -ErrorAction SilentlyContinue
           Compress-Archive -Path $stageDir/* -DestinationPath "$stageDir.zip"
           echo "asset=$stageDir.zip" >> $env:GITHUB_OUTPUT
 

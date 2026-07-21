@@ -12,29 +12,57 @@
 - Razer Synapse must **not be running**. Right-click its tray icon and quit (its background services can stay running, that's fine). If Synapse is running at the same time, it independently injects its own key bindings for the same input, causing double input.
 - To use D-pad/wheel/middle-click remapping, the [Interception](https://github.com/oblitum/Interception) driver must be installed (one-time). See "Known limitation / extra setup step" in `README.md`. Without it, everything else (analog keys, Hypershift) still works fine.
 
+### 1.5 Folder layout
+
+Everything is resolved relative to wherever `tartarus_driver.exe` itself is — put it in any folder, and the rest lives alongside it:
+
+```
+your-folder\
+├── tartarus_driver.exe    ← the driver
+├── run-tray.bat           ← double-click for tray mode
+├── interception.dll       ← copy this in yourself (see "Known limitation" in README.md); optional
+├── config.toml            ← optional; created by configui, or copy config.example.toml and edit it
+├── config.example.toml
+└── tasks\
+    └── run.log            ← created automatically the first time you run it
+```
+
+`config.toml` and `tasks\run.log` don't need to exist beforehand — the driver creates/updates them on its own. `interception.dll` is the only one you have to place manually.
+
 ### 2. Running the driver
+
+If you downloaded the pre-built exe from Releases, run it directly:
+
+```powershell
+.\tartarus_driver.exe          # no args: runs indefinitely until Ctrl+C (normal usage)
+.\tartarus_driver.exe 30       # a number: runs that many seconds then exits (for testing)
+.\tartarus_driver.exe tray     # no console window, runs from a system tray icon instead
+```
+
+Building from source instead, run the equivalent via cargo:
 
 ```powershell
 cd tartarus_driver
-cargo run --release          # no args: runs indefinitely until Ctrl+C (normal usage)
-cargo run --release -- 30    # a number: runs that many seconds then exits (for testing)
-cargo run --release -- tray  # no console window, runs from a system tray icon instead
+cargo run --release
+cargo run --release -- 30
+cargo run --release -- tray
 ```
 
+- The first line printed (and logged) at startup is always `tartarus_driver vX.Y.Z`, so you can confirm which version you're running (e.g. against the Releases page) without checking the exe's properties.
 - On startup, it automatically sends the init command needed to stream analog data without Synapse.
-- While running, pressing keys logs to stdout (and only to `tasks/run.log` in `tray` mode).
+- While running, pressing keys logs to stdout (and only to `tasks/run.log` in `tray` mode). The actual disk write happens on its own background thread — logging never adds latency to key presses, D-pad/wheel remapping, or Hypershift, no matter how fast you press. `run.log` is also capped at ~5 MiB (it truncates and keeps going rather than growing forever), since `tray` mode is meant to be left running for days.
 - With no arguments, it runs until Ctrl+C or the console window is closed. Unless force-killed (e.g. via Task Manager), any held key is automatically released on shutdown.
+- **Double-clicking the exe from Explorer runs normal mode (no args)**, so a console window stays open — this is expected. To get `tray` mode instead, either run `tartarus_driver.exe tray` from a terminal, or double-click **`run-tray.bat`** (included in the release zip), which does the same thing.
 
 #### System tray mode (`tray`)
 
 ```powershell
-cd tartarus_driver
-cargo run --release -- tray
+.\tartarus_driver.exe tray
 ```
 
 - Detaches the console window at startup (when possible), so it can run in the background.
 - Also starts configui's web server automatically (no need to launch `configui` separately).
-- Right-click the tray icon for a menu: "Open settings (configui)" and "Quit". "Open settings" opens the browser where you can edit and save key assignments (restarting `tray` mode itself is still needed to apply changes, same as normal mode). "Quit" performs the same safe shutdown as Ctrl+C (releasing any held key, etc.) before exiting.
+- Right-click the tray icon for a menu: "Open settings (configui)", a grayed-out "Version: vX.Y.Z" line, "Check for updates (GitHub)", and "Quit". "Open settings" opens the browser where you can edit and save key assignments (restarting `tray` mode itself is still needed to apply changes, same as normal mode). "Check for updates" just opens the public repo's Releases page in your browser — there's no automatic update check (no background network calls by design). "Quit" performs the same safe shutdown as Ctrl+C (releasing any held key, etc.) before exiting.
 - No console output — check `tasks/run.log` instead.
 
 ### 3. Changing key assignments
@@ -103,7 +131,7 @@ Holding the "Hyper Response" thumb button (next to the D-pad, labeled "D" in Raz
 | Symptom | Check |
 |---|---|
 | Analog keys do nothing | Confirm Synapse's GUI is really closed (`Get-Process \| Where ProcessName -match 'Razer\|Synapse'` should show no GUI-looking process). Unplugging/replugging the device can also help |
-| D-pad/wheel still act as native arrow keys/scroll too (double input) | The Interception driver may not be installed. Check the startup log for `WARNING: interception.dll could not be loaded` or `Interception::new() returned None` |
+| D-pad/wheel still act as native arrow keys/scroll too (double input) | Check the startup log for `WARNING: interception.dll could not be loaded` or `Interception::new() returned None`. The former usually means the kernel driver is installed but `interception.dll` itself wasn't copied next to `tartarus_driver.exe` (step 4 in README's "Known limitation") — this is easy to miss since the kernel driver install alone doesn't produce any error, just this fallback |
 | Saved in `configui` but nothing changed | Confirm you restarted the normal (or `tray`-mode) driver — there's no auto-reload |
 | No tray icon in `tray` mode | Check `tasks/run.log` for `[tray] WARNING: ...` (window class registration / window creation / icon add failure). Right after an Explorer restart, try relaunching `tray` |
 | Some keys in `config.toml` stay at their default | Check `tasks/run.log` for `WARNING: config.toml [...] is not a recognized key name`. See section 3 above for valid key names |
@@ -120,29 +148,57 @@ Holding the "Hyper Response" thumb button (next to the D-pad, labeled "D" in Raz
 - Razer Synapseは**起動していないこと**。タスクトレイのアイコンを右クリックして終了しておく(バックグラウンドサービス自体は残っていて問題ない)。同時に動いていると、Synapse自身も同じ入力に対して独自のキー割り当てを注入するため、二重入力になる。
 - 十字キー・ホイール・ホイールクリックのリマップを使うには、[Interception](https://github.com/oblitum/Interception)ドライバのインストールが必要(1回だけ)。手順は`README.md`の「既知の制約 / セットアップ追加手順」を参照。未インストールでも、それ以外の機能(アナログキー・Hypershift)は問題なく動く。
 
+### 1.5 フォルダ構成
+
+すべてのファイルは`tartarus_driver.exe`自身の場所を基準に解決される。どこのフォルダに置いてもよく、必要なものは全部その隣に並ぶ:
+
+```
+好きなフォルダ\
+├── tartarus_driver.exe    ← 本体
+├── run-tray.bat           ← ダブルクリックでtrayモード起動
+├── interception.dll       ← 手動でコピーする(README.mdの「既知の制約」参照)。任意
+├── config.toml            ← 任意。configuiで作成するか、config.example.tomlをコピーして編集
+├── config.example.toml
+└── tasks\
+    └── run.log            ← 初回起動時に自動作成
+```
+
+`config.toml`と`tasks\run.log`は事前に用意しなくてよい(ドライバが自動で作成・更新する)。手動で用意が必要なのは`interception.dll`だけ。
+
 ### 2. ドライバを起動する
+
+Releasesからビルド済みexeをダウンロードした場合は、直接実行する:
+
+```powershell
+.\tartarus_driver.exe          # 引数なし: Ctrl+Cを押すまで無期限に動く(通常の使い方)
+.\tartarus_driver.exe 30       # 数字を渡すとその秒数だけ動いて自動終了(テスト用)
+.\tartarus_driver.exe tray     # コンソール窓を出さず、タスクトレイアイコンで動かす
+```
+
+ソースからビルドする場合は、cargo経由で同等のコマンドを実行する:
 
 ```powershell
 cd tartarus_driver
-cargo run --release          # 引数なし: Ctrl+Cを押すまで無期限に動く(通常の使い方)
-cargo run --release -- 30    # 数字を渡すとその秒数だけ動いて自動終了(テスト用)
-cargo run --release -- tray  # コンソール窓を出さず、タスクトレイアイコンで動かす
+cargo run --release
+cargo run --release -- 30
+cargo run --release -- tray
 ```
 
+- 起動時に最初に表示・記録される行は必ず`tartarus_driver vX.Y.Z`なので、exeのプロパティを確認しなくても、今動いているバージョンをReleasesページと照合できる。
 - 起動直後に、Synapseなしでアナログデータを流すための初期化コマンドを自動送信する。
-- 実行中はキーを押すとログが標準出力(`tray`モードでは`tasks/run.log`のみ)に出る。
+- 実行中はキーを押すとログが標準出力(`tray`モードでは`tasks/run.log`のみ)に出る。実際のディスク書き込みは専用のバックグラウンドスレッドで行われるため、どれだけ速くキーを押しても、キー入力・十字キー/ホイールのリマップ・Hypershiftの反応速度にログ処理が影響することはない。`run.log`自体も約5MiBで頭出しして書き続ける仕組み(無限に肥大化しない)なので、`tray`モードで何日も動かし続けても問題ない。
 - 引数なしの場合はCtrl+Cを押すか、コンソール窓を閉じるまで動き続ける。強制終了(タスクマネージャーでの「タスクの終了」など)でない限り、終了時に押しっぱなしのキーがあれば自動的に離す処理が入る。
+- **エクスプローラーからexeをダブルクリックすると、引数なしの通常モードで起動する**ため、コンソール窓が出たままになるのは正常な動作。`tray`モードにしたい場合は、ターミナルから`tartarus_driver.exe tray`を実行するか、リリースzipに同梱されている**`run-tray.bat`**をダブルクリックする(同じ動作をする)。
 
 #### タスクトレイモード (`tray`)
 
 ```powershell
-cd tartarus_driver
-cargo run --release -- tray
+.\tartarus_driver.exe tray
 ```
 
 - 起動時にコンソール窓を自動的に切り離す(可能な場合)ので、バックグラウンドで動かせる。
 - 同時に`configui`のWebサーバーも自動で起動している(別途`configui`を起動する必要はない)。
-- タスクトレイのアイコンを右クリックすると「設定を開く (configui)」「終了」のメニューが出る。「設定を開く」でブラウザが開き、そのままキー割り当てを編集・保存できる(反映には`tray`モード自体の再起動が必要、通常起動時と同様)。「終了」を選ぶと、Ctrl+Cと同じ安全な終了処理(押しっぱなしキーの解放など)を行ってから終了する。
+- タスクトレイのアイコンを右クリックすると「設定を開く (configui)」「バージョン: vX.Y.Z」(グレー表示、クリック不可)「アップデートを確認 (GitHub)」「終了」のメニューが出る。「設定を開く」でブラウザが開き、そのままキー割り当てを編集・保存できる(反映には`tray`モード自体の再起動が必要、通常起動時と同様)。「アップデートを確認」は公開リポジトリのReleasesページをブラウザで開くだけで、自動での更新チェックは行わない(バックグラウンドでの通信は一切しない設計)。「終了」を選ぶと、Ctrl+Cと同じ安全な終了処理(押しっぱなしキーの解放など)を行ってから終了する。
 - ログはコンソールに出ないため`tasks/run.log`を確認する。
 
 ### 3. キー割り当てを変える
@@ -211,7 +267,7 @@ reactive_speed = 2       # 1-4、reactiveで使用
 | 症状 | 確認すること |
 |---|---|
 | アナログキーが何も反応しない | Synapseのタスクトレイアイコンが本当に閉じているか確認(`Get-Process \| Where ProcessName -match 'Razer\|Synapse'`でGUIプロセスが出ないこと)。デバイスの抜き差しも有効な場合がある |
-| 十字キー/ホイールが元の矢印キー・スクロールとしても動いてしまう(二重入力) | Interceptionドライバが入っていない可能性。起動時ログに`WARNING: interception.dll could not be loaded`または`Interception::new() returned None`と出ていないか確認 |
+| 十字キー/ホイールが元の矢印キー・スクロールとしても動いてしまう(二重入力) | 起動時ログに`WARNING: interception.dll could not be loaded`または`Interception::new() returned None`と出ていないか確認。前者は多くの場合、カーネルドライバは入っているが`interception.dll`自体が`tartarus_driver.exe`と同じフォルダにコピーされていない状態(README「既知の制約」の手順4)。カーネルドライバのインストールだけではエラーが出ないため見落としやすい |
 | `configui`で保存したのに反映されない | 通常起動(または`tray`モード)のドライバを再起動したか確認(自動リロードはしない) |
 | `tray`モードでタスクトレイにアイコンが出ない | `tasks/run.log`に`[tray] WARNING: ...`が出ていないか確認(ウィンドウクラス登録・ウィンドウ作成・アイコン追加のいずれかの失敗)。Explorerの再起動直後などは再度`tray`を起動し直す |
 | `config.toml`の一部のキーだけ既定値のままになる | `tasks/run.log`に`WARNING: config.toml [...] は認識できないキー名です`が出ていないか確認。使えるキー名の一覧は本ファイルの3節を参照 |

@@ -6,12 +6,15 @@
 // that can receive the taskbar callback message and TrackPopupMenu needs a
 // window to anchor the popup to.
 //
-// Two menu items: "設定を開く" opens the configui web page (assumed already
-// running — see run_tray_mode in main.rs, which starts it on its own thread
-// before this one) in the default browser; "終了" sets the same
-// SHUTDOWN_REQUESTED flag the console Ctrl handler uses, so the main
-// analog-read loop exits through its normal cleanup path (force-releasing
-// any held key) exactly the same way either shutdown trigger would.
+// Menu: "設定を開く" opens the configui web page (assumed already running —
+// see run_tray_mode in main.rs, which starts it on its own thread before this
+// one) in the default browser; a disabled "バージョン: vX.Y.Z" line for at-a-
+// glance version info; "アップデートを確認" opens the public repo's Releases
+// page (no auto-update check of any kind — this project makes no background
+// network calls on its own, by design; it's just a shortcut to the URL);
+// "終了" sets the same SHUTDOWN_REQUESTED flag the console Ctrl handler uses,
+// so the main analog-read loop exits through its normal cleanup path (force-
+// releasing any held key) exactly the same way either shutdown trigger would.
 
 use crate::{eprintln, println, SHUTDOWN_REQUESTED};
 use std::sync::atomic::Ordering;
@@ -26,16 +29,24 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, GetCursorPos, GetMessageW, LoadIconW, PostQuitMessage, RegisterClassExW,
-    SetForegroundWindow, TrackPopupMenu, TranslateMessage, HICON, IDI_APPLICATION, MF_STRING, MSG,
-    SW_SHOWNORMAL, TPM_LEFTALIGN, TPM_RIGHTBUTTON, WM_APP, WM_COMMAND, WM_DESTROY, WM_LBUTTONUP,
-    WM_RBUTTONUP, WNDCLASSEXW, WS_OVERLAPPED,
+    SetForegroundWindow, TrackPopupMenu, TranslateMessage, HICON, IDI_APPLICATION, MF_DISABLED,
+    MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG, SW_SHOWNORMAL, TPM_LEFTALIGN, TPM_RIGHTBUTTON,
+    WM_APP, WM_COMMAND, WM_DESTROY, WM_LBUTTONUP, WM_RBUTTONUP, WNDCLASSEXW, WS_OVERLAPPED,
 };
 
 const WM_TRAYICON: u32 = WM_APP + 1;
 const IDM_OPEN_SETTINGS: usize = 1;
 const IDM_QUIT: usize = 2;
+const IDM_VERSION: usize = 3;
+const IDM_CHECK_UPDATES: usize = 4;
 const TRAY_ICON_ID: u32 = 1;
 const CLASS_NAME: PCWSTR = w!("TartarusDriverTrayWindowClass");
+
+// Public repo's Releases page — where a newer version, if any, would be
+// published. This project has no auto-update check of its own (no telemetry,
+// no background network calls by design); this menu item just saves the user
+// from having to remember the URL.
+const RELEASES_URL: &str = "https://github.com/ultramonaka/open-tartarus-driver/releases";
 
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
@@ -51,6 +62,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         WM_COMMAND => {
             match wparam.0 & 0xffff {
                 IDM_OPEN_SETTINGS => open_settings_page(),
+                IDM_CHECK_UPDATES => open_releases_page(),
                 IDM_QUIT => {
                     println!("[tray] \"終了\"が選択されました。シャットダウンします。");
                     SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);
@@ -85,6 +97,15 @@ fn show_context_menu(hwnd: HWND) {
             return;
         };
         let _ = AppendMenuW(menu, MF_STRING, IDM_OPEN_SETTINGS, w!("設定を開く (configui)"));
+        let version_label = to_wide(&format!("バージョン: v{}", crate::VERSION));
+        let _ = AppendMenuW(
+            menu,
+            MF_STRING | MF_GRAYED | MF_DISABLED,
+            IDM_VERSION,
+            PCWSTR(version_label.as_ptr()),
+        );
+        let _ = AppendMenuW(menu, MF_STRING, IDM_CHECK_UPDATES, w!("アップデートを確認 (GitHub)"));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, IDM_QUIT, w!("終了"));
         let mut point = Default::default();
         let _ = GetCursorPos(&mut point);
@@ -104,6 +125,17 @@ fn open_settings_page() {
         // just doesn't open, which the user notices immediately.
         let _ = ShellExecuteW(None, w!("open"), w!("http://127.0.0.1:7878/"), None, None, SW_SHOWNORMAL);
     }
+}
+
+fn open_releases_page() {
+    unsafe {
+        let url = to_wide(RELEASES_URL);
+        let _ = ShellExecuteW(None, w!("open"), PCWSTR(url.as_ptr()), None, None, SW_SHOWNORMAL);
+    }
+}
+
+fn to_wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 pub fn spawn_tray_icon_thread() {

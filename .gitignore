@@ -9,12 +9,15 @@
 # Rust build artifacts
 /tartarus_driver/target
 
-# Development-history working notes: task tracker, reverse-engineering
-# research write-ups, raw USB/HID capture logs and test transcripts. Kept
-# locally for reference but deliberately not published (2026-07-21, at the
-# author's request) — see git history before this point if this repo ever
-# tracked it.
-/tasks/
+# tasks/ dev-only working notes: reverse-engineering research write-ups,
+# raw USB/HID capture logs, ad-hoc test transcripts, and the self-generated
+# run.log. Kept locally for reference but deliberately not published.
+# TASKS.md itself is tracked (see the negation below) since it's the
+# actively-maintained task tracker, not disposable working notes — also
+# excluded from the public release separately, see
+# scripts/make-public-release-zip.ps1's $ExcludeFromPublic.
+/tasks/*
+!/tasks/TASKS.md
 
 # Extracted Interception.zip (downloaded driver installer, not project source)
 /Interception/

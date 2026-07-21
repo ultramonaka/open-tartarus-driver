@@ -3,7 +3,7 @@
 **[English](#english)** | **[日本語](#japanese)**
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.1-informational.svg)
+![Version](https://img.shields.io/badge/version-1.0.2-informational.svg)
 ![Author](https://img.shields.io/badge/author-ultramonaka-lightgrey.svg)
 
 ---
@@ -51,19 +51,21 @@ To change key assignments, run `cargo run --release -- configui` and open the UR
 ### Documentation map
 
 - **[`USAGE.md`](USAGE.md)** — day-to-day usage
+- **[`CHANGELOG.md`](CHANGELOG.md)** — what changed in each version
 - **`config.example.toml`** — documented schema/defaults for the key-remap config file (`config.toml`, gitignored — everyone's layout differs)
 
 ### Known limitation / extra setup step
 
 **Fully suppressing the D-pad (arrow keys) turned out to be impossible with Windows user-mode APIs alone** (low-level hooks + Raw Input). `WH_KEYBOARD_LL` is structurally guaranteed by Windows to fire before the matching `WM_INPUT` (needed for device identification) — no amount of thread/timing tuning can change that. Razer Synapse itself uses a kernel driver (`RzFilter.sys`) for the same reason.
 
-To solve this, D-pad/wheel/middle-click remapping (and Hypershift's Alt detection) goes through the third-party kernel-mode driver [Interception](https://github.com/oblitum/Interception) (via the `interception` crate). **The Interception driver itself needs a separate, one-time install**:
+To solve this, D-pad/wheel/middle-click remapping (and Hypershift's Alt detection) goes through the third-party kernel-mode driver [Interception](https://github.com/oblitum/Interception) (via the `interception` crate, which uses **Interception v1.0.1**). **Interception needs a separate, one-time setup — both a kernel driver install AND a DLL placement step**, since this project deliberately doesn't bundle Interception's own DLL (a licensing choice — see `interception`'s LGPL terms):
 
-1. Download `Interception.zip` from [Releases](https://github.com/oblitum/Interception/releases/latest) and extract it
+1. Download `Interception.zip` from [Releases](https://github.com/oblitum/Interception/releases/latest) (use **v1.0.1** to match what this project links against) and extract it
 2. From an **administrator** console, run `install-interception.exe /install` inside the extracted `command line installer` folder
 3. Reboot (required for the kernel driver install)
+4. Copy `library\x64\interception.dll` from the extracted zip into the **same folder as `tartarus_driver.exe`** (this step is easy to miss — without it, the kernel driver installs fine but `tartarus_driver` still can't load `interception.dll` and silently falls back)
 
-If it isn't installed, `tartarus_driver` prints a warning and disables only the D-pad/wheel/middle-click remap; a real keyboard's Alt+Tab will be blocked while the driver runs. Everything else (analog keys, key remapping) keeps working normally either way (confirmed on real hardware, no crash).
+If any of this isn't done, `tartarus_driver` prints a warning and disables only the D-pad/wheel/middle-click remap; a real keyboard's Alt+Tab will be blocked while the driver runs. Everything else (analog keys, key remapping) keeps working normally either way (confirmed on real hardware, no crash).
 
 ### License
 
@@ -116,19 +118,21 @@ Synapseは不要。起動時に自動でアナログストリームの有効化�
 ### ドキュメント構成
 
 - **[`USAGE.md`](USAGE.md)** — 日常の使い方
+- **[`CHANGELOG.md`](CHANGELOG.md)** — 各バージョンの変更点
 - **`config.example.toml`** — キー割り当てファイル(`config.toml`、gitignore対象)のスキーマとデフォルト値の例
 
 ### 既知の制約 / セットアップ追加手順
 
 **十字キー(D-pad)の完全な抑止はWindowsのユーザーモードAPI(低レベルフック + Raw Input)だけでは不可能と判明した。** `WH_KEYBOARD_LL`(低レベルフック)は常に`WM_INPUT`(Raw Input、デバイス判別に必要)より先に呼ばれるという、Windows自体の構造的な順序保証があり、スレッド構成やタイミング調整では解決できない。Razer Synapse自身も同様の理由でカーネルドライバ(`RzFilter.sys`など)を使っている。
 
-この制約を解消するため、十字キー・ホイール・ホイールクリックのリマップ(およびHypershiftのAlt検知)はサードパーティのカーネルモードドライバ[Interception](https://github.com/oblitum/Interception)経由の実装に置き換え済み。**Interceptionドライバ本体の別途インストール(初回のみ)が必要**:
+この制約を解消するため、十字キー・ホイール・ホイールクリックのリマップ(およびHypershiftのAlt検知)はサードパーティのカーネルモードドライバ[Interception](https://github.com/oblitum/Interception)(`interception`クレート経由、**Interception v1.0.1**を使用)経由の実装に置き換え済み。**Interceptionは初回のみ、カーネルドライバのインストールに加えて、DLLの配置も必要**(このプロジェクトではライセンス上の理由からInterception本体のDLLを同梱しない方針のため — `interception`のLGPL条項を参照):
 
-1. [Releases](https://github.com/oblitum/Interception/releases/latest)から`Interception.zip`をダウンロードして展開
+1. [Releases](https://github.com/oblitum/Interception/releases/latest)から`Interception.zip`(このプロジェクトがリンクしているバージョンと合わせて**v1.0.1**を推奨)をダウンロードして展開
 2. 管理者権限のコンソールで、展開した`command line installer`フォルダ内の`install-interception.exe /install`を実行
 3. PCを再起動(カーネルドライバのインストールに必須)
+4. 展開したzip内の`library\x64\interception.dll`を、**`tartarus_driver.exe`と同じフォルダ**にコピーする(見落としやすい手順。これをしないと、カーネルドライバは入っていても`tartarus_driver`が`interception.dll`を読み込めず、気づかないうちにフォールバック動作になる)
 
-未インストールの場合、`tartarus_driver`は警告を表示してD-pad/ホイール/ホイールクリックのリマップだけを無効化し、実キーボードのAlt+Tabもドライバ動作中はブロックされる。それ以外(アナログキー・キーリマップ)はどちらの場合も正常に動作を続ける(クラッシュしない、実機で確認済み)。
+いずれかが未完了の場合、`tartarus_driver`は警告を表示してD-pad/ホイール/ホイールクリックのリマップだけを無効化し、実キーボードのAlt+Tabもドライバ動作中はブロックされる。それ以外(アナログキー・キーリマップ)はどちらの場合も正常に動作を続ける(クラッシュしない、実機で確認済み)。
 
 ### ライセンス
 

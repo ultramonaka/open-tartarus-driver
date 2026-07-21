@@ -1,7 +1,7 @@
 use hidapi::HidApi;
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 mod config;
@@ -70,7 +70,18 @@ fn log_path() -> std::path::PathBuf {
 // practice (wrong shell cwd, mangled multi-line pastes, etc.), losing test
 // output. So the program writes its own log directly, independent of however
 // it's invoked.
-static LOG_FILE: OnceLock<Mutex<std::fs::File>> = OnceLock::new();
+//
+// The actual disk write happens on its own background thread, off of
+// whichever thread called println!/eprintln!. This matters because the
+// D-pad/wheel/Hypershift path (dpad.rs) and the analog key-read loop below
+// both log on every single keystroke/wheel-notch transition, on the same
+// thread that's also responsible for actually forwarding/remapping that
+// event as fast as possible — a synchronous file write (a syscall, however
+// fast) sitting in that path directly adds to input latency, which runs
+// against this project's whole point. println!/eprintln! now only do a
+// cheap in-memory channel send; the writer thread does the real I/O
+// whenever it gets to it, however far behind that ends up being.
+static LOG_SENDER: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
 
 fn init_log_file() {
     let path = log_path();
@@ -82,8 +93,31 @@ fn init_log_file() {
         let _ = std::fs::create_dir_all(parent);
     }
     match std::fs::File::create(&path) {
-        Ok(file) => {
-            let _ = LOG_FILE.set(Mutex::new(file));
+        Ok(mut file) => {
+            let (tx, rx) = std::sync::mpsc::channel::<String>();
+            let _ = LOG_SENDER.set(tx);
+            std::thread::spawn(move || {
+                use std::io::{Seek, Write};
+                // `tray` mode is meant to run for days at a time, and every
+                // keystroke/wheel-notch transition logs a line — cap the
+                // file at ~5 MiB instead of growing it unbounded for the
+                // life of the process. Restarting the file (rather than
+                // deleting/renaming) keeps this thread's single open handle
+                // valid throughout.
+                const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
+                let mut written: u64 = 0;
+                for line in rx {
+                    if written >= MAX_LOG_BYTES {
+                        let _ = file.set_len(0);
+                        let _ = file.rewind();
+                        let _ = file.write_all(b"[log truncated at ~5 MiB; continuing]\n");
+                        written = 0;
+                    }
+                    written += line.len() as u64 + 1;
+                    let _ = file.write_all(line.as_bytes());
+                    let _ = file.write_all(b"\n");
+                }
+            });
             std::println!("Logging to {}", path.display());
         }
         Err(e) => std::eprintln!(
@@ -104,11 +138,8 @@ macro_rules! println {
     ($($arg:tt)*) => {{
         let s = format!($($arg)*);
         std::println!("{s}");
-        if let Some(f) = $crate::LOG_FILE.get() {
-            if let Ok(mut f) = f.lock() {
-                let _ = std::io::Write::write_all(&mut *f, format!("{s}\n").as_bytes());
-                let _ = std::io::Write::flush(&mut *f);
-            }
+        if let Some(tx) = $crate::LOG_SENDER.get() {
+            let _ = tx.send(s);
         }
     }};
 }
@@ -118,11 +149,8 @@ macro_rules! eprintln {
     ($($arg:tt)*) => {{
         let s = format!($($arg)*);
         std::eprintln!("{s}");
-        if let Some(f) = $crate::LOG_FILE.get() {
-            if let Ok(mut f) = f.lock() {
-                let _ = std::io::Write::write_all(&mut *f, format!("{s}\n").as_bytes());
-                let _ = std::io::Write::flush(&mut *f);
-            }
+        if let Some(tx) = $crate::LOG_SENDER.get() {
+            let _ = tx.send(s);
         }
     }};
 }
@@ -331,8 +359,11 @@ fn build_razer_cmd(txn: u8, class: u8, cmd: u8, args: &[u8]) -> [u8; 91] {
     buf
 }
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() {
     init_log_file();
+    println!("tartarus_driver v{VERSION}");
 
     if env::args().nth(1).as_deref() == Some("configui") {
         configui::run_configui_server();
