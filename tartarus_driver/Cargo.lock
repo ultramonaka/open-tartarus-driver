@@ -268,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "tartarus_driver"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "hidapi",
  "interception",

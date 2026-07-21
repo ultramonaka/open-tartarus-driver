@@ -19,33 +19,77 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 
 // ===========================================================================
+// Locating config.toml / tasks/run.log relative to where the binary is
+// actually running from
+// ===========================================================================
+//
+// A prior version resolved these paths at COMPILE time via
+// `env!("CARGO_MANIFEST_DIR")`. That bakes in the absolute path of whichever
+// machine built the binary — harmless for a local `cargo build`, but it means
+// a binary built on a CI runner (e.g. `D:\a\open-tartarus-driver\...`) ships
+// with that CI path hardcoded, so config.toml/run.log can never be found on
+// a user's machine no matter where the exe is placed (confirmed in the wild
+// via the GitHub Actions release build). Resolved at runtime instead:
+//   - Distributed build: the exe sits next to config.toml/tasks/ (the layout
+//     `release.yml` packages), so its own directory is the right base.
+//   - Dev build (`cargo run`/`cargo build`, debug or release): the exe lives
+//     under `tartarus_driver/target/<profile>/`, so walk back up past
+//     `target/<profile>` and the crate dir to the repo root, matching where
+//     config.toml has always lived for development.
+pub fn app_root() -> std::path::PathBuf {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let looks_like_build_profile_dir = exe_dir
+        .file_name()
+        .is_some_and(|n| n == "debug" || n == "release");
+    if looks_like_build_profile_dir
+        && let Some(target_dir) = exe_dir.parent()
+        && target_dir.file_name().is_some_and(|n| n == "target")
+        && let Some(repo_root) = target_dir.parent().and_then(|p| p.parent())
+    {
+        return repo_root.to_path_buf();
+    }
+    exe_dir
+}
+
+pub fn config_path() -> std::path::PathBuf {
+    app_root().join("config.toml")
+}
+
+fn log_path() -> std::path::PathBuf {
+    app_root().join("tasks").join("run.log")
+}
+
+// ===========================================================================
 // Always-on file logging
 // ===========================================================================
 //
 // Piping stdout through `Tee-Object` from PowerShell has repeatedly failed in
 // practice (wrong shell cwd, mangled multi-line pastes, etc.), losing test
 // output. So the program writes its own log directly, independent of however
-// it's invoked. LOG_PATH is resolved at COMPILE time from CARGO_MANIFEST_DIR
-// (the tartarus_driver crate root), not the process's current directory, so
-// it always lands in the same place (`tasks/run.log` at the repo root)
-// regardless of which directory the binary happens to be run from.
+// it's invoked.
 static LOG_FILE: OnceLock<Mutex<std::fs::File>> = OnceLock::new();
-const LOG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tasks/run.log");
 
 fn init_log_file() {
+    let path = log_path();
     // `tasks/` isn't published in the public repo (development-history
     // working notes, gitignored — see .gitignore), so a fresh clone/release
     // download won't have this directory at all; File::create alone would
     // fail since it never creates missing parent directories.
-    if let Some(parent) = std::path::Path::new(LOG_PATH).parent() {
+    if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    match std::fs::File::create(LOG_PATH) {
+    match std::fs::File::create(&path) {
         Ok(file) => {
             let _ = LOG_FILE.set(Mutex::new(file));
-            std::println!("Logging to {LOG_PATH}");
+            std::println!("Logging to {}", path.display());
         }
-        Err(e) => std::eprintln!("WARNING: could not open log file {LOG_PATH}: {e} (console-only)"),
+        Err(e) => std::eprintln!(
+            "WARNING: could not open log file {}: {e} (console-only)",
+            path.display()
+        ),
     }
 }
 

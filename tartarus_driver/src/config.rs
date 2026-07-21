@@ -25,9 +25,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY;
 
-// Same compile-time-resolved-path trick as main.rs's LOG_PATH: always lands
-// at the repo root regardless of the process's current directory.
-pub const CONFIG_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../config.toml");
+// config.toml's path is resolved at runtime relative to the running binary
+// — see main.rs's `app_root()`/`config_path()` for why this isn't a
+// compile-time constant.
 
 // Built-in defaults, used whenever config.toml doesn't specify a given
 // entry. These are exactly the placeholder TEST_KEYMAP / LAYER1_TEST_KEYMAP /
@@ -341,12 +341,14 @@ fn apply_layer_indicator(target: &mut Option<LayerIndicatorConfig>, provided: &O
 pub fn load() -> DriverConfig {
     let mut cfg = DriverConfig::defaults();
 
-    let text = match std::fs::read_to_string(CONFIG_PATH) {
+    let path = crate::config_path();
+    let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
         Err(_) => {
             println!(
-                "No config.toml found at {CONFIG_PATH} — using built-in placeholder keymap. \
-                 Run `cargo run --release -- configui` to create one."
+                "No config.toml found at {} — using built-in placeholder keymap. \
+                 Run `cargo run --release -- configui` to create one.",
+                path.display()
             );
             return cfg;
         }
@@ -388,7 +390,7 @@ pub fn load() -> DriverConfig {
     apply_lighting(&mut cfg.lighting, &raw.lighting);
     apply_layer_indicator(&mut cfg.layer_indicator, &raw.layer_indicator);
 
-    println!("Loaded config.toml from {CONFIG_PATH}.");
+    println!("Loaded config.toml from {}.", path.display());
     cfg
 }
 
@@ -555,7 +557,7 @@ impl ConfigPayload {
     /// validate()s, then overwrites config.toml wholesale on success.
     pub fn validate_and_save(&self) -> Result<(), String> {
         self.validate()?;
-        std::fs::write(CONFIG_PATH, self.to_toml_string())
+        std::fs::write(crate::config_path(), self.to_toml_string())
             .map_err(|e| format!("config.tomlへの書き込みに失敗しました: {e}"))
     }
 
