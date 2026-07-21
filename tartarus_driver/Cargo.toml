@@ -1,0 +1,39 @@
+[package]
+name = "tartarus_driver"
+version = "1.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["ultramonaka"]
+description = "Standalone Rust driver for the Razer Tartarus Pro, no Synapse required"
+
+[dependencies]
+# HIDデバイスと生パケット通信をするため
+hidapi = "2.6.0"
+
+# Win32 API (SendInput / WH_KEYBOARD_LL フック[Hypershift用]) を安全かつ直に叩くため
+windows = { version = "0.58.0", features = [
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Console",
+    "Win32_Foundation",
+] }
+
+# 十字キー・ホイール・ホイールクリックのリマップ用。サードパーティのカーネルモード
+# フィルタドライバ Interception (https://github.com/oblitum/Interception) への
+# 安全な Rust ラッパー。ドライバ自体(interception.sys)は別途インストールが必要
+# (README.md「既知の制約」参照)。interception-sys が同梱する interception.dll への
+# 実行時リンクはビルド時に見つからなくてもプロセス起動を妨げないよう、
+# build.rs で /DELAYLOAD 指定している。
+interception = "0.1.2"
+
+# 設定ファイル(config.toml)の読み込み・保存用
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+# `configui` サブコマンド(ローカルWeb設定画面)用。非同期ランタイム不要の
+# 最小構成の同期HTTPサーバー。
+tiny_http = "0.12"
+serde_json = "1.0"

@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry/build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tartarus_driver
+
+      - name: Build (release)
+        run: cargo build --release
+        working-directory: tartarus_driver
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $stageDir = "tartarus_driver-$version-windows-x64"
+          New-Item -ItemType Directory -Path $stageDir | Out-Null
+          Copy-Item tartarus_driver/target/release/tartarus_driver.exe $stageDir/
+          Copy-Item README.md, USAGE.md, LICENSE, config.example.toml $stageDir/ -ErrorAction SilentlyContinue
+          Compress-Archive -Path $stageDir/* -DestinationPath "$stageDir.zip"
+          echo "asset=$stageDir.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.asset }}
+          generate_release_notes: true

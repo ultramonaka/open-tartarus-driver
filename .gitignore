@@ -1,0 +1,28 @@
+# Personal Claude Code tooling (research MCP server etc.) — unrelated to
+# this project, deliberately not published. See git history if this repo
+# ever tracked it before.
+/Claude-rules
+/Claude-rules-src
+/.mcp.json
+/.claude/agents
+
+# Rust build artifacts
+/tartarus_driver/target
+
+# Development-history working notes: task tracker, reverse-engineering
+# research write-ups, raw USB/HID capture logs and test transcripts. Kept
+# locally for reference but deliberately not published (2026-07-21, at the
+# author's request) — see git history before this point if this repo ever
+# tracked it.
+/tasks/
+
+# Extracted Interception.zip (downloaded driver installer, not project source)
+/Interception/
+
+# Personal key remap config, generated/edited via `configui` — everyone's
+# actual layout will differ, so this is a per-machine file, not project
+# source. See config.example.toml for the documented schema/defaults.
+/config.toml
+
+# Output of scripts/make-public-release-zip.ps1
+/dist/

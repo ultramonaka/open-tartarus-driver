@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Tartarus Pro キーリマップ設定</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7;
+    --panel: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --border: #d8d8dc;
+    --accent: #0071e3;
+    --accent-text: #ffffff;
+    --ok: #1e8e3e;
+    --err: #d93025;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --panel: #2c2c2e;
+      --text: #f5f5f7;
+      --muted: #9a9aa0;
+      --border: #48484a;
+      --accent: #409cff;
+      --accent-text: #0b0b0c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.5rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Yu Gothic UI", system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    max-width: 900px;
+    margin: 0 auto 1.5rem;
+  }
+  .panel h2 { font-size: 1.05rem; margin: 0 0 1rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.35rem 0.5rem; font-size: 0.92rem; }
+  th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+  tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+  td:first-child { color: var(--muted); width: 4.5rem; font-variant-numeric: tabular-nums; }
+  select {
+    width: 100%;
+    padding: 0.3rem 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.92rem;
+  }
+  .grid4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+  .field label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; }
+  input[type="number"] {
+    width: 100%;
+    padding: 0.3rem 0.4rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.92rem;
+  }
+  .hint { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
+  .calib-row { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0; }
+  .calib-row button { padding: 0.4rem 1rem; font-size: 0.85rem; }
+  td input[type="number"] { width: 4.5rem; }
+  td input[type="checkbox"] { width: 1.1rem; height: 1.1rem; }
+  .depth-bar-wrap {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    width: 90px;
+    height: 0.85rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-right: 0.4rem;
+  }
+  .depth-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: var(--accent);
+  }
+  .actions {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    padding: 1rem 0;
+  }
+  button {
+    appearance: none;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.6rem 1.4rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status { font-size: 0.9rem; }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--err); }
+</style>
+</head>
+<body>
+  <h1>Tartarus Pro キーリマップ設定</h1>
+  <p class="sub">
+    保存すると <code>config.toml</code> を上書きします。反映するには
+    <code>tartarus_driver</code> を再起動してください(このページ自体はキー入力を監視しません)。
+  </p>
+
+  <div class="panel">
+    <h2>アナログキー (20キー)</h2>
+    <table>
+      <thead>
+        <tr><th>キー</th><th>通常レイヤー</th><th>Layer1 (Hyper Response押下時)</th></tr>
+      </thead>
+      <tbody id="analog-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>感度 (アクチュエーションポイント)</h2>
+    <div class="grid4">
+      <div class="field">
+        <label>既定値 t_on (押下判定・深く)</label>
+        <input type="number" id="t-on" min="1" max="255">
+      </div>
+      <div class="field">
+        <label>既定値 t_off (解放判定・浅く)</label>
+        <input type="number" id="t-off" min="0" max="254">
+      </div>
+    </div>
+    <p class="hint">
+      キーの押し込み深さは0(未押下)〜255(最深)の生値。深さがt_onを超えたら押下、
+      t_off未満に戻ったら解放と判定する(ヒステリシス)。t_offはt_onより小さい値にすること。
+      値を小さくするほど軽く触れただけで反応するようになる。個別設定していないキーは
+      この既定値が使われる。反応速度への影響はない(判定しきい値が変わるだけ)。
+    </p>
+
+    <div class="calib-row">
+      <button id="calib-toggle-btn" type="button">キャリブレーション開始</button>
+      <span id="calib-status" class="hint" style="margin:0;"></span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>キー</th><th>現在値</th><th>観測最大</th><th>個別設定</th><th>t_on</th><th>t_off</th></tr>
+      </thead>
+      <tbody id="perkey-body"></tbody>
+    </table>
+    <p class="hint">
+      「キャリブレーション開始」を押してから実際にキーを押し込むと、「現在値」がリアルタイムに動き、
+      「観測最大」にはこれまでで一番深く押し込んだ値が残る(このページを開いている間のみ記録、保存はされない)。
+      これを参考に各キーのt_on/t_offを決められる。「個別設定」にチェックを入れたキーだけ、
+      既定値の代わりにそのキー専用のt_on/t_offが使われる。
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>十字キー (D-pad)</h2>
+    <div class="grid4">
+      <div class="field"><label>左</label><div id="slot-dpad-left"></div></div>
+      <div class="field"><label>上</label><div id="slot-dpad-up"></div></div>
+      <div class="field"><label>右</label><div id="slot-dpad-right"></div></div>
+      <div class="field"><label>下</label><div id="slot-dpad-down"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>ホイール / 中クリック</h2>
+    <div class="grid4">
+      <div class="field"><label>ホイール上</label><div id="slot-wheel-up"></div></div>
+      <div class="field"><label>ホイール下</label><div id="slot-wheel-down"></div></div>
+      <div class="field"><label>中クリック</label><div id="slot-middle-click"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>ライティング (LED)</h2>
+    <div class="grid4">
+      <div class="field">
+        <label>エフェクト</label>
+        <select id="lighting-effect">
+          <option value="none">変更しない</option>
+          <option value="off">消灯</option>
+          <option value="static">単色</option>
+          <option value="breathing">呼吸(単色)</option>
+          <option value="spectrum">スペクトラム</option>
+          <option value="wave">ウェーブ</option>
+          <option value="reactive">リアクティブ</option>
+        </select>
+      </div>
+      <div class="field" id="lighting-color-field">
+        <label>色</label>
+        <input type="color" id="lighting-color">
+      </div>
+      <div class="field" id="lighting-brightness-field">
+        <label>明るさ (0-255)</label>
+        <input type="number" id="lighting-brightness" min="0" max="255">
+      </div>
+      <div class="field" id="lighting-direction-field">
+        <label>方向</label>
+        <select id="lighting-direction">
+          <option value="left">左</option>
+          <option value="right">右</option>
+        </select>
+      </div>
+      <div class="field" id="lighting-speed-field">
+        <label>速度 (1-4)</label>
+        <input type="number" id="lighting-speed" min="1" max="4">
+      </div>
+    </div>
+    <p class="hint">
+      「変更しない」を選ぶと <code>config.toml</code> の <code>[lighting]</code> は
+      <code>effect = "none"</code> のまま(=デバイス側の現在のライティング状態を変更しない)。
+      それ以外を選ぶと、ドライバ起動時に毎回そのライティングコマンドを送信する。
+      このプロトコルは実機で未検証(調査ベース、<code>tasks/research/</code>参照)。
+      期待通りに光らない場合は <code>tasks/run.log</code> を確認。
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>レイヤーインジケータ</h2>
+    <div class="grid4">
+      <div class="field">
+        <label><input type="checkbox" id="layer-indicator-enabled" style="width:auto;margin-right:0.4rem;">有効にする</label>
+      </div>
+      <div class="field" id="layer-indicator-color-field">
+        <label>色</label>
+        <select id="layer-indicator-color">
+          <option value="red">赤</option>
+          <option value="green">緑</option>
+          <option value="blue">青</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint">
+      有効にすると、側面のインジケータLEDが Hyper Response ボタンを押している間(Layer1有効時)だけ点灯し、
+      離すと消灯する。上の「ライティング (LED)」パネルのメインキー照明とは別系統のLED(側面の3灯のうち1つ)
+      なので、スペクトラム等のメイン照明を邪魔しない。このプロトコルはOpenRazer自体もTartarus Proでは
+      未実装のため実機で未検証(調査ベース、<code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>参照)。
+      光らない場合は<code>tasks/run.log</code>の<code>WARNING: failed to send layer indicator ...</code>を確認。
+    </p>
+  </div>
+
+  <div class="actions">
+    <button id="save-btn">保存</button>
+    <span id="status"></span>
+  </div>
+
+<script>
+let KEY_OPTIONS = [];
+
+function makeSelect(id, currentValue) {
+  const sel = document.createElement('select');
+  sel.id = id;
+  for (const name of KEY_OPTIONS) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    if (name === currentValue) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  if (!KEY_OPTIONS.includes(currentValue)) {
+    // Defensive: config.toml/driver could in principle report a name this
+    // page's vocabulary doesn't include (e.g. hand-edited to something the
+    // driver's vk_to_name() hex-fallback produced). Surface it rather than
+    // silently substituting the first option.
+    const opt = document.createElement('option');
+    opt.value = currentValue;
+    opt.textContent = currentValue + ' (未知のキー)';
+    opt.selected = true;
+    sel.appendChild(opt);
+  }
+  return sel;
+}
+
+function fillSlot(slotId, selectId, value) {
+  const slot = document.getElementById(slotId);
+  slot.replaceChildren(makeSelect(selectId, value));
+}
+
+async function init() {
+  const [options, config] = await Promise.all([
+    fetch('/api/key-options').then(r => r.json()),
+    fetch('/api/config').then(r => r.json()),
+  ]);
+  KEY_OPTIONS = options;
+
+  const tbody = document.getElementById('analog-body');
+  const rows = [];
+  for (let i = 0; i < 20; i++) {
+    const label = 'key' + String(i + 1).padStart(2, '0');
+    const tr = document.createElement('tr');
+    const tdLabel = document.createElement('td');
+    tdLabel.textContent = label;
+    const tdDefault = document.createElement('td');
+    const tdLayer1 = document.createElement('td');
+    tdDefault.appendChild(makeSelect('analog-default-' + i, config.keys_default[i]));
+    tdLayer1.appendChild(makeSelect('analog-layer1-' + i, config.keys_layer1[i]));
+    tr.append(tdLabel, tdDefault, tdLayer1);
+    rows.push(tr);
+  }
+  tbody.replaceChildren(...rows);
+
+  fillSlot('slot-dpad-left', 'dpad-left', config.dpad_left);
+  fillSlot('slot-dpad-up', 'dpad-up', config.dpad_up);
+  fillSlot('slot-dpad-right', 'dpad-right', config.dpad_right);
+  fillSlot('slot-dpad-down', 'dpad-down', config.dpad_down);
+  fillSlot('slot-wheel-up', 'wheel-up', config.wheel_up);
+  fillSlot('slot-wheel-down', 'wheel-down', config.wheel_down);
+  fillSlot('slot-middle-click', 'middle-click', config.middle_click);
+
+  document.getElementById('t-on').value = config.t_on;
+  document.getElementById('t-off').value = config.t_off;
+  buildPerKeyActuationTable(config);
+
+  document.getElementById('lighting-effect').value = config.lighting_effect;
+  document.getElementById('lighting-color').value = '#' + config.lighting_color;
+  document.getElementById('lighting-brightness').value = config.lighting_brightness;
+  document.getElementById('lighting-direction').value = config.lighting_wave_direction;
+  document.getElementById('lighting-speed').value = config.lighting_reactive_speed;
+  updateLightingFieldVisibility();
+
+  document.getElementById('layer-indicator-enabled').checked = config.layer_indicator_enabled;
+  document.getElementById('layer-indicator-color').value = config.layer_indicator_color;
+}
+
+function buildPerKeyActuationTable(config) {
+  const tbody = document.getElementById('perkey-body');
+  const rows = [];
+  for (let i = 0; i < 20; i++) {
+    const label = 'key' + String(i + 1).padStart(2, '0');
+    const hasOverride = config.per_key_t_on[i] != null && config.per_key_t_off[i] != null;
+
+    const tr = document.createElement('tr');
+
+    const tdLabel = document.createElement('td');
+    tdLabel.textContent = label;
+
+    const tdDepth = document.createElement('td');
+    const barWrap = document.createElement('span');
+    barWrap.className = 'depth-bar-wrap';
+    const bar = document.createElement('div');
+    bar.className = 'depth-bar';
+    bar.id = 'depth-bar-' + i;
+    barWrap.appendChild(bar);
+    const depthNum = document.createElement('span');
+    depthNum.id = 'depth-num-' + i;
+    depthNum.textContent = '0';
+    tdDepth.append(barWrap, depthNum);
+
+    const tdMax = document.createElement('td');
+    tdMax.id = 'depth-max-' + i;
+    tdMax.textContent = '0';
+
+    const tdEnable = document.createElement('td');
+    const enableCheckbox = document.createElement('input');
+    enableCheckbox.type = 'checkbox';
+    enableCheckbox.id = 'perkey-enable-' + i;
+    enableCheckbox.checked = hasOverride;
+    tdEnable.appendChild(enableCheckbox);
+
+    const tdTon = document.createElement('td');
+    const tonInput = document.createElement('input');
+    tonInput.type = 'number';
+    tonInput.min = 1;
+    tonInput.max = 255;
+    tonInput.id = 'perkey-ton-' + i;
+    tonInput.value = hasOverride ? config.per_key_t_on[i] : config.t_on;
+    tonInput.disabled = !hasOverride;
+    tdTon.appendChild(tonInput);
+
+    const tdToff = document.createElement('td');
+    const toffInput = document.createElement('input');
+    toffInput.type = 'number';
+    toffInput.min = 0;
+    toffInput.max = 254;
+    toffInput.id = 'perkey-toff-' + i;
+    toffInput.value = hasOverride ? config.per_key_t_off[i] : config.t_off;
+    toffInput.disabled = !hasOverride;
+    tdToff.appendChild(toffInput);
+
+    enableCheckbox.addEventListener('change', () => {
+      tonInput.disabled = !enableCheckbox.checked;
+      toffInput.disabled = !enableCheckbox.checked;
+    });
+
+    tr.append(tdLabel, tdDepth, tdMax, tdEnable, tdTon, tdToff);
+    rows.push(tr);
+  }
+  tbody.replaceChildren(...rows);
+}
+
+let calibrationTimer = null;
+const observedMax = new Array(20).fill(0);
+
+async function toggleCalibration() {
+  const btn = document.getElementById('calib-toggle-btn');
+  const status = document.getElementById('calib-status');
+
+  if (calibrationTimer) {
+    clearInterval(calibrationTimer);
+    calibrationTimer = null;
+    btn.textContent = 'キャリブレーション開始';
+    status.textContent = '';
+    try {
+      await fetch('/api/calibration/stop', { method: 'POST' });
+    } catch (e) {
+      // best-effort; the server times out on its own after 10 minutes regardless
+    }
+    return;
+  }
+
+  try {
+    await fetch('/api/calibration/start', { method: 'POST' });
+  } catch (e) {
+    status.textContent = '通信エラー: ' + e;
+    return;
+  }
+  btn.textContent = 'キャリブレーション停止';
+  status.textContent = 'キーを押してみてください...';
+  calibrationTimer = setInterval(pollCalibration, 150);
+}
+
+async function pollCalibration() {
+  try {
+    const res = await fetch('/api/calibration/live');
+    const data = await res.json();
+    if (!data.active) {
+      clearInterval(calibrationTimer);
+      calibrationTimer = null;
+      document.getElementById('calib-toggle-btn').textContent = 'キャリブレーション開始';
+      document.getElementById('calib-status').textContent = '(タイムアウトのため自動停止しました)';
+      return;
+    }
+    for (let i = 0; i < 20 && i < data.depths.length; i++) {
+      const depth = data.depths[i];
+      observedMax[i] = Math.max(observedMax[i], depth);
+      document.getElementById('depth-num-' + i).textContent = depth;
+      document.getElementById('depth-bar-' + i).style.width = (depth / 255 * 100) + '%';
+      document.getElementById('depth-max-' + i).textContent = observedMax[i];
+    }
+  } catch (e) {
+    // transient network hiccup; the next poll retries on its own
+  }
+}
+
+function updateLightingFieldVisibility() {
+  const effect = document.getElementById('lighting-effect').value;
+  const setVisible = (id, visible) => {
+    document.getElementById(id).style.display = visible ? '' : 'none';
+  };
+  setVisible('lighting-color-field', ['static', 'breathing', 'reactive'].includes(effect));
+  setVisible('lighting-brightness-field', effect !== 'none');
+  setVisible('lighting-direction-field', effect === 'wave');
+  setVisible('lighting-speed-field', effect === 'reactive');
+}
+
+function selectValue(id) {
+  return document.getElementById(id).value;
+}
+
+function perKeyValues(inputIdPrefix) {
+  const values = [];
+  for (let i = 0; i < 20; i++) {
+    const enabled = document.getElementById('perkey-enable-' + i).checked;
+    values.push(enabled ? Number(document.getElementById(inputIdPrefix + i).value) : null);
+  }
+  return values;
+}
+
+async function save() {
+  const status = document.getElementById('status');
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  status.textContent = '保存中...';
+  status.className = '';
+
+  const keysDefault = [];
+  const keysLayer1 = [];
+  for (let i = 0; i < 20; i++) {
+    keysDefault.push(selectValue('analog-default-' + i));
+    keysLayer1.push(selectValue('analog-layer1-' + i));
+  }
+
+  const payload = {
+    keys_default: keysDefault,
+    keys_layer1: keysLayer1,
+    dpad_left: selectValue('dpad-left'),
+    dpad_up: selectValue('dpad-up'),
+    dpad_right: selectValue('dpad-right'),
+    dpad_down: selectValue('dpad-down'),
+    wheel_up: selectValue('wheel-up'),
+    wheel_down: selectValue('wheel-down'),
+    middle_click: selectValue('middle-click'),
+    t_on: Number(document.getElementById('t-on').value),
+    t_off: Number(document.getElementById('t-off').value),
+    per_key_t_on: perKeyValues('perkey-ton-'),
+    per_key_t_off: perKeyValues('perkey-toff-'),
+    lighting_effect: document.getElementById('lighting-effect').value,
+    lighting_color: document.getElementById('lighting-color').value.replace('#', '').toUpperCase(),
+    lighting_brightness: Number(document.getElementById('lighting-brightness').value),
+    lighting_wave_direction: document.getElementById('lighting-direction').value,
+    lighting_reactive_speed: Number(document.getElementById('lighting-speed').value),
+    layer_indicator_enabled: document.getElementById('layer-indicator-enabled').checked,
+    layer_indicator_color: document.getElementById('layer-indicator-color').value,
+  };
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    if (res.ok && body.ok) {
+      status.textContent = '保存しました。反映するには tartarus_driver を再起動してください。';
+      status.className = 'ok';
+    } else {
+      status.textContent = 'エラー: ' + (body.error || res.status);
+      status.className = 'err';
+    }
+  } catch (e) {
+    status.textContent = '通信エラー: ' + e;
+    status.className = 'err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('save-btn').addEventListener('click', save);
+document.getElementById('lighting-effect').addEventListener('change', updateLightingFieldVisibility);
+document.getElementById('calib-toggle-btn').addEventListener('click', toggleCalibration);
+window.addEventListener('beforeunload', () => {
+  if (calibrationTimer) {
+    navigator.sendBeacon('/api/calibration/stop');
+  }
+});
+init();
+</script>
+</body>
+</html>

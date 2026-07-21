@@ -1,0 +1,105 @@
+# Example tartarus_driver key remap config.
+#
+# This file documents the config.toml schema and shows the built-in
+# placeholder defaults (the same values tartarus_driver falls back to when
+# config.toml doesn't exist at all, or a specific entry is missing). Copy
+# this to config.toml and edit it, or just use `cargo run --release --
+# configui` and edit it from the browser instead — either way produces the
+# same file format.
+#
+# Every value is a key name from a closed vocabulary: single digits "0".."9",
+# single letters "A".."Z", "F1".."F24", the arrow keys "LEFT"/"UP"/"RIGHT"/
+# "DOWN", and these named keys: "SPACE", "ENTER", "TAB", "ESCAPE",
+# "BACKSPACE", "LSHIFT", "RSHIFT", "LCTRL", "RCTRL", "LALT", "RALT", "HOME",
+# "END", "PAGEUP", "PAGEDOWN", "INSERT", "DELETE". An unrecognized name (typo,
+# wrong case handled automatically but an unknown word is not) falls back to
+# the built-in default for that one entry and prints a warning to
+# tasks/run.log — it never crashes the driver or breaks other entries.
+#
+# [keys.default] / [keys.layer1]: the 20 analog keys, numbered key01..key20
+# matching the number printed on each physical keycap. [keys.default] is the
+# normal layer; [keys.layer1] is what's active while the "Hyper Response"
+# thumb button (Hypershift) is held down.
+
+[keys.default]
+key01 = "1"
+key02 = "2"
+key03 = "3"
+key04 = "4"
+key05 = "5"
+key06 = "6"
+key07 = "7"
+key08 = "8"
+key09 = "9"
+key10 = "0"
+key11 = "A"
+key12 = "B"
+key13 = "C"
+key14 = "D"
+key15 = "E"
+key16 = "F"
+key17 = "G"
+key18 = "H"
+key19 = "I"
+key20 = "J"
+
+[keys.layer1]
+key01 = "F1"
+key02 = "F2"
+key03 = "F3"
+key04 = "F4"
+key05 = "F5"
+key06 = "F6"
+key07 = "F7"
+key08 = "F8"
+key09 = "F9"
+key10 = "F10"
+key11 = "F11"
+key12 = "F12"
+key13 = "F13"
+key14 = "F14"
+key15 = "F15"
+key16 = "F16"
+key17 = "F17"
+key18 = "F18"
+key19 = "F19"
+key20 = "F20"
+
+# The 8-way D-pad's four directions.
+[dpad]
+left = "K"
+up = "W"
+right = "L"
+down = "S"
+
+# The scroll wheel taps this key once per notch rolled.
+[wheel]
+up = "O"
+down = "P"
+
+# The wheel's click-in (middle-button) action.
+[middle_click]
+key = "M"
+
+# Hysteresis thresholds on the raw 0-255 analog depth scale (see Purpose.md
+# §6.1). t_off MUST be strictly less than t_on; an invalid pair falls back
+# to these same built-in defaults for both values together.
+[actuation]
+t_on = 100
+t_off = 80
+
+# LED lighting (see Purpose.md §6④). effect = "none" (the default, also
+# used when this whole section is omitted) means "don't touch the LEDs at
+# all" — the device keeps whatever effect/color it already had. Any other
+# effect is (re-)sent once at every driver startup.
+#   effect: "none" | "off" | "static" | "breathing" | "spectrum" | "wave" | "reactive"
+#   color: "RRGGBB" hex, used by static/breathing/reactive
+#   brightness: 0-255
+#   wave_direction: "left" | "right", used by wave
+#   reactive_speed: 1-4, used by reactive
+[lighting]
+effect = "none"
+color = "FFFFFF"
+brightness = 255
+wave_direction = "left"
+reactive_speed = 2
