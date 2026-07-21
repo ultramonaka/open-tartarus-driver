@@ -7,6 +7,10 @@
 <a name="english"></a>
 ## English
 
+### v1.0.3
+
+- **Added**: a non-affiliation/trademark disclaimer to `README.md` ("Razer" and "Tartarus" are trademarks of Razer Inc.; this project is not affiliated with, endorsed by, or supported by Razer Inc.).
+
 ### v1.0.2
 
 - **Fixed**: `config.toml` and `tasks/run.log` paths were resolved at compile time via `CARGO_MANIFEST_DIR`, which baked in the build machine's absolute path. A GitHub Actions-built release exe shipped with the CI runner's path hardcoded, so `config.toml` could never be found on a user's machine regardless of where the exe was placed. Both paths are now resolved at runtime relative to the running exe (or the repo root, for a dev build).
@@ -25,6 +29,10 @@ Initial public release.
 
 <a name="japanese"></a>
 ## 日本語
+
+### v1.0.3
+
+- **追加**: `README.md`にRazer社との無関係・商標に関する免責事項を追加(「Razer」「Tartarus」はRazer社の商標であり、本プロジェクトはRazer社とは無関係・非公認・非支援であることを明記)。
 
 ### v1.0.2
 

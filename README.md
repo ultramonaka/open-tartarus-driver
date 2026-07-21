@@ -3,7 +3,7 @@
 **[English](#english)** | **[日本語](#japanese)**
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.2-informational.svg)
+![Version](https://img.shields.io/badge/version-1.0.3-informational.svg)
 ![Author](https://img.shields.io/badge/author-ultramonaka-lightgrey.svg)
 
 ---
@@ -12,6 +12,8 @@
 ## English
 
 **`tartarus_driver`** is a from-scratch Rust driver for the Razer Tartarus Pro (the left-hand analog gaming keypad) that runs on Windows **without Razer Synapse at all** — no background service, no telemetry, no vendor software required.
+
+> **Disclaimer**: This is an independent, community-developed project, not affiliated with, endorsed by, or supported by Razer Inc. "Razer" and "Tartarus" are trademarks of Razer Inc. Provided as-is, with no warranty (see the [License](#license) section).
 
 ### Features
 
@@ -79,6 +81,8 @@ Licensed under the **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
 ## 日本語
 
 **`tartarus_driver`** は、Razer Tartarus Pro(左手用アナログキースイッチ搭載デバイス)を、Razer Synapseを一切使わずに動かすための、Windows向け自作Rustドライバです。バックグラウンドサービスもテレメトリも、ベンダー製ソフトウェアも一切不要です。
+
+> **免責事項**: 本プロジェクトはRazer社とは無関係の、個人・非公式のプロジェクトです。Razer社による公認・支援は受けていません。「Razer」「Tartarus」はRazer社の商標です。本ソフトウェアは無保証で提供されます(詳細は[ライセンス](#ライセンス)を参照)。
 
 ### 主な機能
 
