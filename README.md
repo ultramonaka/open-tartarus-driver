@@ -3,7 +3,7 @@
 **[English](#english)** | **[日本語](#japanese)**
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.3-informational.svg)
+![Version](https://img.shields.io/badge/version-1.0.4-informational.svg)
 ![Author](https://img.shields.io/badge/author-ultramonaka-lightgrey.svg)
 
 ---
@@ -23,6 +23,16 @@
 - **Hypershift**: a temporary second key layer while the "Hyper Response" thumb button is held, with no side effects on a real keyboard's Alt+Tab
 - **LED lighting control** — static color, breathing, spectrum, wave, and reactive effects
 - **Runs in the background indefinitely**, optionally from a system tray icon (`tray` mode) with no console window
+
+### Screenshots
+
+`configui`, the browser-based config page — remap every analog key on two layers (Default and the Hypershift layer):
+
+![configui: key remap settings](img/configgui_1.png)
+
+Live sensitivity calibration — watch each key's raw depth in real time while dialing in per-key `t_on`/`t_off` overrides:
+
+![configui: live calibration](img/configgui_2.png)
 
 ### Requirements
 
@@ -92,6 +102,16 @@ Licensed under the **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
 - **Hypershift** — 「Hyper Response」サムボタンを押している間だけ有効になる一時的な第2レイヤー。実キーボードのAlt+Tabに副作用なし
 - **LEDライティング制御** — 単色・呼吸・スペクトラム・ウェーブ・リアクティブの各エフェクト
 - **無期限のバックグラウンド実行**、コンソール窓を出さないタスクトレイモード(`tray`)にも対応
+
+### スクリーンショット
+
+`configui`(ブラウザの設定画面)— 全アナログキーを2レイヤー(通常・Hypershiftレイヤー)分リマップできる:
+
+![configui: キー割り当て設定](img/configgui_1.png)
+
+リアルタイム感度キャリブレーション — 各キーの生の押し込み深度を見ながら、キーごとの`t_on`/`t_off`を調整できる:
+
+![configui: ライブキャリブレーション](img/configgui_2.png)
 
 ### 動作環境
 

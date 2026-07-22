@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 mod config;
 mod configui;
 mod dpad;
+mod emulate;
 mod hypershift;
 mod lighting;
 mod tray;
@@ -279,16 +280,90 @@ fn send_key(vk: VIRTUAL_KEY, key_up: bool) {
     }
 }
 
-fn open_analog_devices(api: &HidApi) -> Vec<(i32, hidapi::HidDevice)> {
-    let infos: Vec<_> = api
-        .device_list()
+// Purpose.md §6② step 3: on the Hypershift-release edge, force-send KeyUp
+// for every key still logically down so nothing stays stuck held after the
+// layer switches back to Default. (If the physical key is still past T_ON
+// afterwards, the next report re-presses it under the Default layer, which
+// is the intended meaning of the key now.) Shared by the real driver loop
+// and `emulate` mode (see emulate.rs) so both exercise this edge exactly the
+// same way.
+pub(crate) fn force_keyup_on_hypershift_release(
+    pressed_vk: &mut [Option<VIRTUAL_KEY>; NUM_KEYS],
+    start: Instant,
+) {
+    for (i, slot) in pressed_vk.iter_mut().enumerate() {
+        if let Some(vk) = slot.take() {
+            send_key(vk, true);
+            println!(
+                "[t={:>8.3}s] key{:02} UP   (forced: Hypershift released)",
+                start.elapsed().as_secs_f64(),
+                i + 1
+            );
+        }
+    }
+}
+
+// Runs the hysteresis + keymap + SendInput decision for one already-parsed
+// analog report: `depths[i]` is the 0-255 depth for key(i+1) (report ID 6,
+// bytes[1..=NUM_KEYS]). Shared by the real driver loop (fed from an actual
+// HID read) and `emulate` mode (fed from a synthetic depth array typed at a
+// terminal — see emulate.rs), so both exercise identical logic bit-for-bit.
+pub(crate) fn process_key_depths(
+    depths: &[u8; NUM_KEYS],
+    hypershift: bool,
+    pressed_vk: &mut [Option<VIRTUAL_KEY>; NUM_KEYS],
+    start: Instant,
+) {
+    for i in 0..NUM_KEYS {
+        let depth = depths[i];
+        let (t_on, t_off) = cfg().actuation.for_key(i);
+        if pressed_vk[i].is_none() && depth > t_on {
+            let vk = if hypershift {
+                cfg().analog.layer1[i]
+            } else {
+                cfg().analog.default[i]
+            };
+            pressed_vk[i] = Some(vk);
+            send_key(vk, false);
+            println!(
+                "[t={:>8.3}s] key{:02} DOWN (depth={:#04x}, layer={})",
+                start.elapsed().as_secs_f64(),
+                i + 1,
+                depth,
+                if hypershift { "Layer1" } else { "Default" }
+            );
+        } else if depth < t_off
+            && let Some(vk) = pressed_vk[i].take()
+        {
+            send_key(vk, true);
+            println!(
+                "[t={:>8.3}s] key{:02} UP   (depth={:#04x})",
+                start.elapsed().as_secs_f64(),
+                i + 1,
+                depth
+            );
+        }
+    }
+}
+
+// Filters hidapi's device list down to the Tartarus Pro's collections that
+// are actually readable: matching VID/PID, minus the two boot collections
+// (Usage Page 0x01, Usage 0x02 "Mouse" / 0x06 "Keyboard") that Windows' HID
+// class driver claims exclusively (ReadFile on them always fails with
+// ACCESS_DENIED). Shared by open_analog_devices below (which exits the
+// process if this comes back empty — fine for the driver's fail-fast CLI
+// startup) and configui's try_open_analog_devices (which must fail soft
+// instead, since it runs inside the long-lived config web server).
+pub(crate) fn analog_device_infos(api: &HidApi) -> Vec<hidapi::DeviceInfo> {
+    api.device_list()
         .filter(|d| d.vendor_id() == VID && d.product_id() == PID)
-        // Usage Page 0x01 / Usage 0x02 (Mouse) and 0x06 (Keyboard) are boot
-        // collections claimed exclusively by the Windows HID class driver;
-        // ReadFile on them always fails with ACCESS_DENIED. Skip them.
         .filter(|d| !(d.usage_page() == 0x0001 && (d.usage() == 0x0002 || d.usage() == 0x0006)))
         .cloned()
-        .collect();
+        .collect()
+}
+
+fn open_analog_devices(api: &HidApi) -> Vec<(i32, hidapi::HidDevice)> {
+    let infos = analog_device_infos(api);
 
     if infos.is_empty() {
         eprintln!(
@@ -365,14 +440,21 @@ fn main() {
     init_log_file();
     println!("tartarus_driver v{VERSION}");
 
-    if env::args().nth(1).as_deref() == Some("configui") {
-        configui::run_configui_server();
-        return;
-    }
-
-    if env::args().nth(1).as_deref() == Some("tray") {
-        run_tray_mode();
-        return;
+    let subcommand = env::args().nth(1);
+    match subcommand.as_deref() {
+        Some("configui") => {
+            configui::run_configui_server();
+            return;
+        }
+        Some("tray") => {
+            run_tray_mode();
+            return;
+        }
+        Some("emulate") => {
+            emulate::run_emulator();
+            return;
+        }
+        _ => {}
     }
 
     // Historical one-shot investigation subcommands (`razerheartbeat`,
@@ -392,7 +474,7 @@ fn main() {
     // stopped only by Ctrl+C/console close (see console_ctrl_handler below).
     // An explicit numeric argument still time-boxes the run, as before —
     // useful for scripted tests. 0 explicitly also means "forever".
-    let duration_secs: u64 = env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let duration_secs: u64 = subcommand.and_then(|s| s.parse().ok()).unwrap_or(0);
     let run_forever = duration_secs == 0;
 
     unsafe {
@@ -530,16 +612,7 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
         // is still past T_ON afterwards, the next report re-presses it under
         // the Default layer, which is the intended meaning of the key now.)
         if hypershift_prev && !hypershift {
-            for (i, slot) in pressed_vk.iter_mut().enumerate() {
-                if let Some(vk) = slot.take() {
-                    send_key(vk, true);
-                    println!(
-                        "[t={:>8.3}s] key{:02} UP   (forced: Hypershift released)",
-                        start.elapsed().as_secs_f64(),
-                        i + 1
-                    );
-                }
-            }
+            force_keyup_on_hypershift_release(&mut pressed_vk, start);
         }
         hypershift_prev = hypershift;
 
@@ -548,36 +621,8 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
                 if len < 1 + NUM_KEYS || buf[0] != ANALOG_REPORT_ID {
                     continue;
                 }
-                for i in 0..NUM_KEYS {
-                    let depth = buf[1 + i];
-                    let (t_on, t_off) = cfg().actuation.for_key(i);
-                    if pressed_vk[i].is_none() && depth > t_on {
-                        let vk = if hypershift {
-                            cfg().analog.layer1[i]
-                        } else {
-                            cfg().analog.default[i]
-                        };
-                        pressed_vk[i] = Some(vk);
-                        send_key(vk, false);
-                        println!(
-                            "[t={:>8.3}s] key{:02} DOWN (depth={:#04x}, layer={})",
-                            start.elapsed().as_secs_f64(),
-                            i + 1,
-                            depth,
-                            if hypershift { "Layer1" } else { "Default" }
-                        );
-                    } else if depth < t_off
-                        && let Some(vk) = pressed_vk[i].take()
-                    {
-                        send_key(vk, true);
-                        println!(
-                            "[t={:>8.3}s] key{:02} UP   (depth={:#04x})",
-                            start.elapsed().as_secs_f64(),
-                            i + 1,
-                            depth
-                        );
-                    }
-                }
+                let depths: [u8; NUM_KEYS] = buf[1..1 + NUM_KEYS].try_into().unwrap();
+                process_key_depths(&depths, hypershift, &mut pressed_vk, start);
             }
         }
         std::thread::sleep(Duration::from_micros(500));

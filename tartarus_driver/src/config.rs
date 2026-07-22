@@ -88,6 +88,20 @@ pub struct DriverConfig {
     // analog loop turns cfg.color's indicator LED on while Hypershift/Layer1
     // is active and off otherwise (see run_driver in main.rs).
     pub layer_indicator: Option<LayerIndicatorConfig>,
+    // `configui`'s own display language ("en" | "ja"), not read by the driver
+    // itself at all — persisted here purely so the browser page remembers
+    // the user's choice across restarts instead of resetting every time.
+    pub configui: ConfiguiSettings,
+}
+
+pub struct ConfiguiSettings {
+    pub language: String,
+}
+
+impl Default for ConfiguiSettings {
+    fn default() -> Self {
+        ConfiguiSettings { language: "en".to_string() }
+    }
 }
 
 impl DriverConfig {
@@ -113,6 +127,7 @@ impl DriverConfig {
             },
             lighting: None,
             layer_indicator: None,
+            configui: ConfiguiSettings::default(),
         }
     }
 }
@@ -171,6 +186,11 @@ struct RawLayerIndicator {
 }
 
 #[derive(Deserialize, Default)]
+struct RawConfigui {
+    language: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
 struct RawConfig {
     keys: Option<RawKeys>,
     dpad: Option<RawDpad>,
@@ -179,6 +199,7 @@ struct RawConfig {
     actuation: Option<RawActuation>,
     lighting: Option<RawLighting>,
     layer_indicator: Option<RawLayerIndicator>,
+    configui: Option<RawConfigui>,
 }
 
 fn parse_color(s: &str) -> Result<Color, String> {
@@ -334,6 +355,22 @@ fn apply_layer_indicator(target: &mut Option<LayerIndicatorConfig>, provided: &O
     }
 }
 
+// Applies [configui], if present. Purely a UI preference (never read by the
+// driver's own analog loop), so an invalid value just falls back to the
+// default ("en") with a warning rather than affecting anything functional.
+fn apply_configui(target: &mut ConfiguiSettings, provided: &Option<RawConfigui>) {
+    let Some(raw) = provided else { return };
+    let Some(lang) = &raw.language else { return };
+    if lang == "en" || lang == "ja" {
+        target.language = lang.clone();
+    } else {
+        eprintln!(
+            "WARNING: config.toml [configui] language = \"{lang}\" is not \"en\" or \"ja\"; \
+             keeping the default (\"en\")."
+        );
+    }
+}
+
 /// Loads config.toml if present, falling back to built-in placeholder
 /// defaults for anything absent, unparsable, or individually invalid. Prints
 /// one status line either way (via the crate's file-logging println!) so
@@ -389,6 +426,7 @@ pub fn load() -> DriverConfig {
     apply_actuation(&mut cfg.actuation, &raw.actuation);
     apply_lighting(&mut cfg.lighting, &raw.lighting);
     apply_layer_indicator(&mut cfg.layer_indicator, &raw.layer_indicator);
+    apply_configui(&mut cfg.configui, &raw.configui);
 
     println!("Loaded config.toml from {}.", path.display());
     cfg
@@ -424,6 +462,7 @@ pub struct ConfigPayload {
     pub lighting_reactive_speed: u8,     // 1-4, relevant for reactive
     pub layer_indicator_enabled: bool,
     pub layer_indicator_color: String, // "red" | "green" | "blue"
+    pub language: String,              // "en" | "ja" — configui's own display language
 }
 
 // Decomposes an Option<LightingConfig> into the flat string/number fields
@@ -480,6 +519,7 @@ impl ConfigPayload {
                 .as_ref()
                 .map(|l| l.color.name().to_string())
                 .unwrap_or_else(|| "green".to_string()),
+            language: cfg.configui.language.clone(),
         }
     }
 
@@ -509,13 +549,17 @@ impl ConfigPayload {
         for (i, name) in self.keys_layer1.iter().enumerate() {
             check(format!("keys.layer1.key{:02}", i + 1), name)?;
         }
-        check("dpad.left".into(), &self.dpad_left)?;
-        check("dpad.up".into(), &self.dpad_up)?;
-        check("dpad.right".into(), &self.dpad_right)?;
-        check("dpad.down".into(), &self.dpad_down)?;
-        check("wheel.up".into(), &self.wheel_up)?;
-        check("wheel.down".into(), &self.wheel_down)?;
-        check("middle_click.key".into(), &self.middle_click)?;
+        for (label, name) in [
+            ("dpad.left", &self.dpad_left),
+            ("dpad.up", &self.dpad_up),
+            ("dpad.right", &self.dpad_right),
+            ("dpad.down", &self.dpad_down),
+            ("wheel.up", &self.wheel_up),
+            ("wheel.down", &self.wheel_down),
+            ("middle_click.key", &self.middle_click),
+        ] {
+            check(label.into(), name)?;
+        }
         if self.t_off >= self.t_on {
             return Err(format!(
                 "actuation.t_off ({}) は actuation.t_on ({}) より小さくする必要があります",
@@ -551,6 +595,12 @@ impl ConfigPayload {
                 self.layer_indicator_color
             ));
         }
+        if self.language != "en" && self.language != "ja" {
+            return Err(format!(
+                "configui.language: \"{}\" は \"en\" または \"ja\" である必要があります",
+                self.language
+            ));
+        }
         Ok(())
     }
 
@@ -562,24 +612,24 @@ impl ConfigPayload {
     }
 
     fn to_toml_string(&self) -> String {
+        use std::fmt::Write as _;
         let mut s = String::from("# tartarus_driver key remap config — generated by `configui`\n\n[keys.default]\n");
         for (i, name) in self.keys_default.iter().enumerate() {
-            s.push_str(&format!("key{:02} = \"{name}\"\n", i + 1));
+            writeln!(s, "key{:02} = \"{name}\"", i + 1).unwrap();
         }
         s.push_str("\n[keys.layer1]\n");
         for (i, name) in self.keys_layer1.iter().enumerate() {
-            s.push_str(&format!("key{:02} = \"{name}\"\n", i + 1));
+            writeln!(s, "key{:02} = \"{name}\"", i + 1).unwrap();
         }
-        s.push_str(&format!(
+        write!(
+            s,
             "\n[dpad]\nleft = \"{}\"\nup = \"{}\"\nright = \"{}\"\ndown = \"{}\"\n",
             self.dpad_left, self.dpad_up, self.dpad_right, self.dpad_down
-        ));
-        s.push_str(&format!(
-            "\n[wheel]\nup = \"{}\"\ndown = \"{}\"\n",
-            self.wheel_up, self.wheel_down
-        ));
-        s.push_str(&format!("\n[middle_click]\nkey = \"{}\"\n", self.middle_click));
-        s.push_str(&format!("\n[actuation]\nt_on = {}\nt_off = {}\n", self.t_on, self.t_off));
+        )
+        .unwrap();
+        write!(s, "\n[wheel]\nup = \"{}\"\ndown = \"{}\"\n", self.wheel_up, self.wheel_down).unwrap();
+        write!(s, "\n[middle_click]\nkey = \"{}\"\n", self.middle_click).unwrap();
+        write!(s, "\n[actuation]\nt_on = {}\nt_off = {}\n", self.t_on, self.t_off).unwrap();
         let overrides: Vec<(usize, u8, u8)> = (0..NUM_KEYS)
             .filter_map(|i| match (self.per_key_t_on[i], self.per_key_t_off[i]) {
                 (Some(on), Some(off)) => Some((i, on, off)),
@@ -589,17 +639,22 @@ impl ConfigPayload {
         if !overrides.is_empty() {
             s.push_str("\n[actuation.per_key]\n");
             for (i, on, off) in overrides {
-                s.push_str(&format!("key{:02} = {{ t_on = {on}, t_off = {off} }}\n", i + 1));
+                writeln!(s, "key{:02} = {{ t_on = {on}, t_off = {off} }}", i + 1).unwrap();
             }
         }
-        s.push_str(&format!(
+        write!(
+            s,
             "\n[lighting]\neffect = \"{}\"\ncolor = \"{}\"\nbrightness = {}\nwave_direction = \"{}\"\nreactive_speed = {}\n",
             self.lighting_effect, self.lighting_color, self.lighting_brightness, self.lighting_wave_direction, self.lighting_reactive_speed
-        ));
-        s.push_str(&format!(
+        )
+        .unwrap();
+        write!(
+            s,
             "\n[layer_indicator]\nenabled = {}\ncolor = \"{}\"\n",
             self.layer_indicator_enabled, self.layer_indicator_color
-        ));
+        )
+        .unwrap();
+        write!(s, "\n[configui]\nlanguage = \"{}\"\n", self.language).unwrap();
         s
     }
 }
@@ -815,6 +870,38 @@ mod tests {
         assert!(payload.validate().is_err());
 
         payload.layer_indicator_color = "red".to_string();
+        assert!(payload.validate().is_ok());
+    }
+
+    #[test]
+    fn configui_language_defaults_to_english_and_round_trips() {
+        let cfg = DriverConfig::defaults();
+        assert_eq!(cfg.configui.language, "en");
+        let payload = ConfigPayload::from_driver_config(&cfg);
+        assert_eq!(payload.language, "en");
+        assert!(payload.validate().is_ok());
+    }
+
+    #[test]
+    fn apply_configui_rejects_unknown_language_and_applies_a_good_one() {
+        let mut settings = ConfiguiSettings::default();
+        let bad = Some(RawConfigui { language: Some("fr".to_string()) });
+        apply_configui(&mut settings, &bad);
+        assert_eq!(settings.language, "en"); // unchanged, falls back to default
+
+        let good = Some(RawConfigui { language: Some("ja".to_string()) });
+        apply_configui(&mut settings, &good);
+        assert_eq!(settings.language, "ja");
+    }
+
+    #[test]
+    fn payload_rejects_unrecognized_language() {
+        let cfg = DriverConfig::defaults();
+        let mut payload = ConfigPayload::from_driver_config(&cfg);
+        payload.language = "fr".to_string();
+        assert!(payload.validate().is_err());
+
+        payload.language = "ja".to_string();
         assert!(payload.validate().is_ok());
     }
 }

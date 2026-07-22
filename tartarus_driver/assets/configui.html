@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Tartarus Pro キーリマップ設定</title>
+<title>Tartarus Pro Key Remap Settings</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -36,8 +36,17 @@
     font-family: -apple-system, "Segoe UI", "Yu Gothic UI", system-ui, sans-serif;
     line-height: 1.5;
   }
+  .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
+  #language-select {
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 0.85rem;
+  }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -128,154 +137,302 @@
 </style>
 </head>
 <body>
-  <h1>Tartarus Pro キーリマップ設定</h1>
-  <p class="sub">
-    保存すると <code>config.toml</code> を上書きします。反映するには
-    <code>tartarus_driver</code> を再起動してください(このページ自体はキー入力を監視しません)。
+  <div class="titlebar">
+    <h1 data-i18n="pageTitle">Tartarus Pro Key Remap Settings</h1>
+    <select id="language-select">
+      <option value="en">English</option>
+      <option value="ja">日本語</option>
+    </select>
+  </div>
+  <p class="sub" data-i18n-html="subtitleHtml">
+    Saving overwrites <code>config.toml</code>. Restart <code>tartarus_driver</code> for changes to take
+    effect (this page itself never reads keystrokes).
   </p>
 
   <div class="panel">
-    <h2>アナログキー (20キー)</h2>
+    <h2 data-i18n="panelAnalog">Analog Keys (20 keys)</h2>
     <table>
       <thead>
-        <tr><th>キー</th><th>通常レイヤー</th><th>Layer1 (Hyper Response押下時)</th></tr>
+        <tr>
+          <th data-i18n="thKey">Key</th>
+          <th data-i18n="thDefaultLayer">Default Layer</th>
+          <th data-i18n="thLayer1">Layer1 (while Hyper Response is held)</th>
+        </tr>
       </thead>
       <tbody id="analog-body"></tbody>
     </table>
   </div>
 
   <div class="panel">
-    <h2>感度 (アクチュエーションポイント)</h2>
+    <h2 data-i18n="panelSensitivity">Sensitivity (Actuation Point)</h2>
     <div class="grid4">
       <div class="field">
-        <label>既定値 t_on (押下判定・深く)</label>
+        <label data-i18n="labelTOn">Default t_on (press threshold, deeper)</label>
         <input type="number" id="t-on" min="1" max="255">
       </div>
       <div class="field">
-        <label>既定値 t_off (解放判定・浅く)</label>
+        <label data-i18n="labelTOff">Default t_off (release threshold, shallower)</label>
         <input type="number" id="t-off" min="0" max="254">
       </div>
     </div>
-    <p class="hint">
-      キーの押し込み深さは0(未押下)〜255(最深)の生値。深さがt_onを超えたら押下、
-      t_off未満に戻ったら解放と判定する(ヒステリシス)。t_offはt_onより小さい値にすること。
-      値を小さくするほど軽く触れただけで反応するようになる。個別設定していないキーは
-      この既定値が使われる。反応速度への影響はない(判定しきい値が変わるだけ)。
-    </p>
+    <p class="hint" data-i18n-html="hintSensitivityHtml"></p>
 
     <div class="calib-row">
-      <button id="calib-toggle-btn" type="button">キャリブレーション開始</button>
+      <button id="calib-toggle-btn" type="button" data-i18n="btnCalibStart">Start Calibration</button>
       <span id="calib-status" class="hint" style="margin:0;"></span>
     </div>
 
     <table>
       <thead>
-        <tr><th>キー</th><th>現在値</th><th>観測最大</th><th>個別設定</th><th>t_on</th><th>t_off</th></tr>
+        <tr>
+          <th data-i18n="thKey">Key</th>
+          <th data-i18n="thCurrent">Current</th>
+          <th data-i18n="thObservedMax">Observed Max</th>
+          <th data-i18n="thOverride">Override</th>
+          <th data-i18n="thTOn">t_on</th>
+          <th data-i18n="thTOff">t_off</th>
+        </tr>
       </thead>
       <tbody id="perkey-body"></tbody>
     </table>
-    <p class="hint">
-      「キャリブレーション開始」を押してから実際にキーを押し込むと、「現在値」がリアルタイムに動き、
-      「観測最大」にはこれまでで一番深く押し込んだ値が残る(このページを開いている間のみ記録、保存はされない)。
-      これを参考に各キーのt_on/t_offを決められる。「個別設定」にチェックを入れたキーだけ、
-      既定値の代わりにそのキー専用のt_on/t_offが使われる。
-    </p>
+    <p class="hint" data-i18n-html="hintCalibrationHtml"></p>
   </div>
 
   <div class="panel">
-    <h2>十字キー (D-pad)</h2>
+    <h2 data-i18n="panelDpad">D-pad</h2>
     <div class="grid4">
-      <div class="field"><label>左</label><div id="slot-dpad-left"></div></div>
-      <div class="field"><label>上</label><div id="slot-dpad-up"></div></div>
-      <div class="field"><label>右</label><div id="slot-dpad-right"></div></div>
-      <div class="field"><label>下</label><div id="slot-dpad-down"></div></div>
+      <div class="field"><label data-i18n="labelLeft">Left</label><div id="slot-dpad-left"></div></div>
+      <div class="field"><label data-i18n="labelUp">Up</label><div id="slot-dpad-up"></div></div>
+      <div class="field"><label data-i18n="labelRight">Right</label><div id="slot-dpad-right"></div></div>
+      <div class="field"><label data-i18n="labelDown">Down</label><div id="slot-dpad-down"></div></div>
     </div>
   </div>
 
   <div class="panel">
-    <h2>ホイール / 中クリック</h2>
+    <h2 data-i18n="panelWheel">Wheel / Middle Click</h2>
     <div class="grid4">
-      <div class="field"><label>ホイール上</label><div id="slot-wheel-up"></div></div>
-      <div class="field"><label>ホイール下</label><div id="slot-wheel-down"></div></div>
-      <div class="field"><label>中クリック</label><div id="slot-middle-click"></div></div>
+      <div class="field"><label data-i18n="labelWheelUp">Wheel Up</label><div id="slot-wheel-up"></div></div>
+      <div class="field"><label data-i18n="labelWheelDown">Wheel Down</label><div id="slot-wheel-down"></div></div>
+      <div class="field"><label data-i18n="labelMiddleClick">Middle Click</label><div id="slot-middle-click"></div></div>
     </div>
   </div>
 
   <div class="panel">
-    <h2>ライティング (LED)</h2>
+    <h2 data-i18n="panelLighting">Lighting (LED)</h2>
     <div class="grid4">
       <div class="field">
-        <label>エフェクト</label>
+        <label data-i18n="labelEffect">Effect</label>
         <select id="lighting-effect">
-          <option value="none">変更しない</option>
-          <option value="off">消灯</option>
-          <option value="static">単色</option>
-          <option value="breathing">呼吸(単色)</option>
-          <option value="spectrum">スペクトラム</option>
-          <option value="wave">ウェーブ</option>
-          <option value="reactive">リアクティブ</option>
+          <option value="none" data-i18n="optEffectNone">Don't change</option>
+          <option value="off" data-i18n="optEffectOff">Off</option>
+          <option value="static" data-i18n="optEffectStatic">Static</option>
+          <option value="breathing" data-i18n="optEffectBreathing">Breathing</option>
+          <option value="spectrum" data-i18n="optEffectSpectrum">Spectrum</option>
+          <option value="wave" data-i18n="optEffectWave">Wave</option>
+          <option value="reactive" data-i18n="optEffectReactive">Reactive</option>
         </select>
       </div>
       <div class="field" id="lighting-color-field">
-        <label>色</label>
+        <label data-i18n="labelColor">Color</label>
         <input type="color" id="lighting-color">
       </div>
       <div class="field" id="lighting-brightness-field">
-        <label>明るさ (0-255)</label>
+        <label data-i18n="labelBrightness">Brightness (0-255)</label>
         <input type="number" id="lighting-brightness" min="0" max="255">
       </div>
       <div class="field" id="lighting-direction-field">
-        <label>方向</label>
+        <label data-i18n="labelDirection">Direction</label>
         <select id="lighting-direction">
-          <option value="left">左</option>
-          <option value="right">右</option>
+          <option value="left" data-i18n="optDirLeft">Left</option>
+          <option value="right" data-i18n="optDirRight">Right</option>
         </select>
       </div>
       <div class="field" id="lighting-speed-field">
-        <label>速度 (1-4)</label>
+        <label data-i18n="labelSpeed">Speed (1-4)</label>
         <input type="number" id="lighting-speed" min="1" max="4">
       </div>
     </div>
-    <p class="hint">
-      「変更しない」を選ぶと <code>config.toml</code> の <code>[lighting]</code> は
-      <code>effect = "none"</code> のまま(=デバイス側の現在のライティング状態を変更しない)。
-      それ以外を選ぶと、ドライバ起動時に毎回そのライティングコマンドを送信する。
-      このプロトコルは実機で未検証(調査ベース、<code>tasks/research/</code>参照)。
-      期待通りに光らない場合は <code>tasks/run.log</code> を確認。
-    </p>
+    <p class="hint" data-i18n-html="hintLightingHtml"></p>
   </div>
 
   <div class="panel">
-    <h2>レイヤーインジケータ</h2>
+    <h2 data-i18n="panelLayerIndicator">Layer Indicator</h2>
     <div class="grid4">
       <div class="field">
-        <label><input type="checkbox" id="layer-indicator-enabled" style="width:auto;margin-right:0.4rem;">有効にする</label>
+        <label>
+          <input type="checkbox" id="layer-indicator-enabled" style="width:auto;margin-right:0.4rem;">
+          <span data-i18n="labelLayerIndicatorEnable">Enable</span>
+        </label>
       </div>
       <div class="field" id="layer-indicator-color-field">
-        <label>色</label>
+        <label data-i18n="labelColor">Color</label>
         <select id="layer-indicator-color">
-          <option value="red">赤</option>
-          <option value="green">緑</option>
-          <option value="blue">青</option>
+          <option value="red" data-i18n="optColorRed">Red</option>
+          <option value="green" data-i18n="optColorGreen">Green</option>
+          <option value="blue" data-i18n="optColorBlue">Blue</option>
         </select>
       </div>
     </div>
-    <p class="hint">
-      有効にすると、側面のインジケータLEDが Hyper Response ボタンを押している間(Layer1有効時)だけ点灯し、
-      離すと消灯する。上の「ライティング (LED)」パネルのメインキー照明とは別系統のLED(側面の3灯のうち1つ)
-      なので、スペクトラム等のメイン照明を邪魔しない。このプロトコルはOpenRazer自体もTartarus Proでは
-      未実装のため実機で未検証(調査ベース、<code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>参照)。
-      光らない場合は<code>tasks/run.log</code>の<code>WARNING: failed to send layer indicator ...</code>を確認。
-    </p>
+    <p class="hint" data-i18n-html="hintLayerIndicatorHtml"></p>
   </div>
 
   <div class="actions">
-    <button id="save-btn">保存</button>
+    <button id="save-btn" data-i18n="btnSave">Save</button>
     <span id="status"></span>
   </div>
 
 <script>
+const I18N = {
+  en: {
+    pageTitle: "Tartarus Pro Key Remap Settings",
+    subtitleHtml: 'Saving overwrites <code>config.toml</code>. Restart <code>tartarus_driver</code> for changes to take effect (this page itself never reads keystrokes).',
+    panelAnalog: "Analog Keys (20 keys)",
+    thKey: "Key",
+    thDefaultLayer: "Default Layer",
+    thLayer1: "Layer1 (while Hyper Response is held)",
+    panelSensitivity: "Sensitivity (Actuation Point)",
+    labelTOn: "Default t_on (press threshold, deeper)",
+    labelTOff: "Default t_off (release threshold, shallower)",
+    hintSensitivityHtml: 'Key press depth is a raw value from 0 (not pressed) to 255 (fully pressed). A key registers as pressed once its depth exceeds t_on, and released once it drops below t_off (hysteresis). t_off must be smaller than t_on. Lower values make a key trigger with a lighter touch. Keys without an override use this default. Has no effect on response speed (only the threshold changes).',
+    btnCalibStart: "Start Calibration",
+    btnCalibStop: "Stop Calibration",
+    thCurrent: "Current",
+    thObservedMax: "Observed Max",
+    thOverride: "Override",
+    thTOn: "t_on",
+    thTOff: "t_off",
+    hintCalibrationHtml: 'Click "Start Calibration", then actually press keys — "Current" updates live, and "Observed Max" keeps the deepest value seen so far (recorded only while this page is open, never saved). Use these to decide each key\'s t_on/t_off. Only keys with "Override" checked use their own t_on/t_off instead of the default.',
+    panelDpad: "D-pad",
+    labelLeft: "Left",
+    labelUp: "Up",
+    labelRight: "Right",
+    labelDown: "Down",
+    panelWheel: "Wheel / Middle Click",
+    labelWheelUp: "Wheel Up",
+    labelWheelDown: "Wheel Down",
+    labelMiddleClick: "Middle Click",
+    panelLighting: "Lighting (LED)",
+    labelEffect: "Effect",
+    optEffectNone: "Don't change",
+    optEffectOff: "Off",
+    optEffectStatic: "Static",
+    optEffectBreathing: "Breathing",
+    optEffectSpectrum: "Spectrum",
+    optEffectWave: "Wave",
+    optEffectReactive: "Reactive",
+    labelColor: "Color",
+    labelBrightness: "Brightness (0-255)",
+    labelDirection: "Direction",
+    optDirLeft: "Left",
+    optDirRight: "Right",
+    labelSpeed: "Speed (1-4)",
+    hintLightingHtml: 'Choosing "Don\'t change" leaves <code>config.toml</code>\'s <code>[lighting]</code> at <code>effect = "none"</code> (i.e. the device\'s current lighting state is left alone). Any other choice sends that lighting command every time the driver starts. Not individually verified on real hardware for every effect (research-based, see <code>tasks/research/</code>). If it doesn\'t light up as expected, check <code>tasks/run.log</code>.',
+    panelLayerIndicator: "Layer Indicator",
+    labelLayerIndicatorEnable: "Enable",
+    optColorRed: "Red",
+    optColorGreen: "Green",
+    optColorBlue: "Blue",
+    hintLayerIndicatorHtml: 'When enabled, the side indicator LED lights up only while the Hyper Response button is held (Layer1 active), and turns off when released. This is a separate LED (one of the 3 side LEDs) from the main key lighting panel above, so it doesn\'t interfere with effects like Spectrum. OpenRazer itself doesn\'t implement this for the Tartarus Pro either, so it\'s unverified on real hardware (research-based, see <code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>). If it doesn\'t light up, check <code>tasks/run.log</code> for <code>WARNING: failed to send layer indicator ...</code>.',
+    btnSave: "Save",
+    statusSaving: "Saving...",
+    statusSaved: "Saved. Restart tartarus_driver to apply.",
+    statusErrorPrefix: "Error: ",
+    statusNetworkErrorPrefix: "Network error: ",
+    calibPromptPressKeys: "Try pressing keys...",
+    calibTimeoutMsg: "(auto-stopped due to timeout)",
+    unknownKeySuffix: "(unknown key)",
+  },
+  ja: {
+    pageTitle: "Tartarus Pro キーリマップ設定",
+    subtitleHtml: '保存すると <code>config.toml</code> を上書きします。反映するには <code>tartarus_driver</code> を再起動してください(このページ自体はキー入力を監視しません)。',
+    panelAnalog: "アナログキー (20キー)",
+    thKey: "キー",
+    thDefaultLayer: "通常レイヤー",
+    thLayer1: "Layer1 (Hyper Response押下時)",
+    panelSensitivity: "感度 (アクチュエーションポイント)",
+    labelTOn: "既定値 t_on (押下判定・深く)",
+    labelTOff: "既定値 t_off (解放判定・浅く)",
+    hintSensitivityHtml: 'キーの押し込み深さは0(未押下)〜255(最深)の生値。深さがt_onを超えたら押下、t_off未満に戻ったら解放と判定する(ヒステリシス)。t_offはt_onより小さい値にすること。値を小さくするほど軽く触れただけで反応するようになる。個別設定していないキーはこの既定値が使われる。反応速度への影響はない(判定しきい値が変わるだけ)。',
+    btnCalibStart: "キャリブレーション開始",
+    btnCalibStop: "キャリブレーション停止",
+    thCurrent: "現在値",
+    thObservedMax: "観測最大",
+    thOverride: "個別設定",
+    thTOn: "t_on",
+    thTOff: "t_off",
+    hintCalibrationHtml: '「キャリブレーション開始」を押してから実際にキーを押し込むと、「現在値」がリアルタイムに動き、「観測最大」にはこれまでで一番深く押し込んだ値が残る(このページを開いている間のみ記録、保存はされない)。これを参考に各キーのt_on/t_offを決められる。「個別設定」にチェックを入れたキーだけ、既定値の代わりにそのキー専用のt_on/t_offが使われる。',
+    panelDpad: "十字キー (D-pad)",
+    labelLeft: "左",
+    labelUp: "上",
+    labelRight: "右",
+    labelDown: "下",
+    panelWheel: "ホイール / 中クリック",
+    labelWheelUp: "ホイール上",
+    labelWheelDown: "ホイール下",
+    labelMiddleClick: "中クリック",
+    panelLighting: "ライティング (LED)",
+    labelEffect: "エフェクト",
+    optEffectNone: "変更しない",
+    optEffectOff: "消灯",
+    optEffectStatic: "単色",
+    optEffectBreathing: "呼吸(単色)",
+    optEffectSpectrum: "スペクトラム",
+    optEffectWave: "ウェーブ",
+    optEffectReactive: "リアクティブ",
+    labelColor: "色",
+    labelBrightness: "明るさ (0-255)",
+    labelDirection: "方向",
+    optDirLeft: "左",
+    optDirRight: "右",
+    labelSpeed: "速度 (1-4)",
+    hintLightingHtml: '「変更しない」を選ぶと <code>config.toml</code> の <code>[lighting]</code> は <code>effect = "none"</code> のまま(=デバイス側の現在のライティング状態を変更しない)。それ以外を選ぶと、ドライバ起動時に毎回そのライティングコマンドを送信する。このプロトコルは実機で未検証(調査ベース、<code>tasks/research/</code>参照)。期待通りに光らない場合は <code>tasks/run.log</code> を確認。',
+    panelLayerIndicator: "レイヤーインジケータ",
+    labelLayerIndicatorEnable: "有効にする",
+    optColorRed: "赤",
+    optColorGreen: "緑",
+    optColorBlue: "青",
+    hintLayerIndicatorHtml: '有効にすると、側面のインジケータLEDが Hyper Response ボタンを押している間(Layer1有効時)だけ点灯し、離すと消灯する。上の「ライティング (LED)」パネルのメインキー照明とは別系統のLED(側面の3灯のうち1つ)なので、スペクトラム等のメイン照明を邪魔しない。このプロトコルはOpenRazer自体もTartarus Proでは未実装のため実機で未検証(調査ベース、<code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>参照)。光らない場合は<code>tasks/run.log</code>の<code>WARNING: failed to send layer indicator ...</code>を確認。',
+    btnSave: "保存",
+    statusSaving: "保存中...",
+    statusSaved: "保存しました。反映するには tartarus_driver を再起動してください。",
+    statusErrorPrefix: "エラー: ",
+    statusNetworkErrorPrefix: "通信エラー: ",
+    calibPromptPressKeys: "キーを押してみてください...",
+    calibTimeoutMsg: "(タイムアウトのため自動停止しました)",
+    unknownKeySuffix: "(未知のキー)",
+  },
+};
+
+let currentLang = 'en';
 let KEY_OPTIONS = [];
+
+function applyLanguage(lang) {
+  if (!I18N[lang]) lang = 'en';
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.title = I18N[lang].pageTitle;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = I18N[lang][el.dataset.i18n];
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    el.innerHTML = I18N[lang][el.dataset.i18nHtml];
+  });
+  document.getElementById('language-select').value = lang;
+  updateCalibButtonText();
+}
+
+async function setLanguage(lang) {
+  applyLanguage(lang);
+  try {
+    await fetch('/api/language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang }),
+    });
+  } catch (e) {
+    // best-effort; the preference just won't persist this time
+  }
+}
 
 function makeSelect(id, currentValue) {
   const sel = document.createElement('select');
@@ -294,7 +451,7 @@ function makeSelect(id, currentValue) {
     // silently substituting the first option.
     const opt = document.createElement('option');
     opt.value = currentValue;
-    opt.textContent = currentValue + ' (未知のキー)';
+    opt.textContent = currentValue + ' ' + I18N[currentLang].unknownKeySuffix;
     opt.selected = true;
     sel.appendChild(opt);
   }
@@ -312,6 +469,7 @@ async function init() {
     fetch('/api/config').then(r => r.json()),
   ]);
   KEY_OPTIONS = options;
+  applyLanguage(config.language || 'en');
 
   const tbody = document.getElementById('analog-body');
   const rows = [];
@@ -421,14 +579,18 @@ function buildPerKeyActuationTable(config) {
 let calibrationTimer = null;
 const observedMax = new Array(20).fill(0);
 
-async function toggleCalibration() {
+function updateCalibButtonText() {
   const btn = document.getElementById('calib-toggle-btn');
+  btn.textContent = calibrationTimer ? I18N[currentLang].btnCalibStop : I18N[currentLang].btnCalibStart;
+}
+
+async function toggleCalibration() {
   const status = document.getElementById('calib-status');
 
   if (calibrationTimer) {
     clearInterval(calibrationTimer);
     calibrationTimer = null;
-    btn.textContent = 'キャリブレーション開始';
+    updateCalibButtonText();
     status.textContent = '';
     try {
       await fetch('/api/calibration/stop', { method: 'POST' });
@@ -441,12 +603,12 @@ async function toggleCalibration() {
   try {
     await fetch('/api/calibration/start', { method: 'POST' });
   } catch (e) {
-    status.textContent = '通信エラー: ' + e;
+    status.textContent = I18N[currentLang].statusNetworkErrorPrefix + e;
     return;
   }
-  btn.textContent = 'キャリブレーション停止';
-  status.textContent = 'キーを押してみてください...';
   calibrationTimer = setInterval(pollCalibration, 150);
+  updateCalibButtonText();
+  status.textContent = I18N[currentLang].calibPromptPressKeys;
 }
 
 async function pollCalibration() {
@@ -456,8 +618,8 @@ async function pollCalibration() {
     if (!data.active) {
       clearInterval(calibrationTimer);
       calibrationTimer = null;
-      document.getElementById('calib-toggle-btn').textContent = 'キャリブレーション開始';
-      document.getElementById('calib-status').textContent = '(タイムアウトのため自動停止しました)';
+      updateCalibButtonText();
+      document.getElementById('calib-status').textContent = I18N[currentLang].calibTimeoutMsg;
       return;
     }
     for (let i = 0; i < 20 && i < data.depths.length; i++) {
@@ -500,7 +662,7 @@ async function save() {
   const status = document.getElementById('status');
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
-  status.textContent = '保存中...';
+  status.textContent = I18N[currentLang].statusSaving;
   status.className = '';
 
   const keysDefault = [];
@@ -531,6 +693,7 @@ async function save() {
     lighting_reactive_speed: Number(document.getElementById('lighting-speed').value),
     layer_indicator_enabled: document.getElementById('layer-indicator-enabled').checked,
     layer_indicator_color: document.getElementById('layer-indicator-color').value,
+    language: currentLang,
   };
 
   try {
@@ -541,14 +704,14 @@ async function save() {
     });
     const body = await res.json();
     if (res.ok && body.ok) {
-      status.textContent = '保存しました。反映するには tartarus_driver を再起動してください。';
+      status.textContent = I18N[currentLang].statusSaved;
       status.className = 'ok';
     } else {
-      status.textContent = 'エラー: ' + (body.error || res.status);
+      status.textContent = I18N[currentLang].statusErrorPrefix + (body.error || res.status);
       status.className = 'err';
     }
   } catch (e) {
-    status.textContent = '通信エラー: ' + e;
+    status.textContent = I18N[currentLang].statusNetworkErrorPrefix + e;
     status.className = 'err';
   } finally {
     btn.disabled = false;
@@ -558,6 +721,7 @@ async function save() {
 document.getElementById('save-btn').addEventListener('click', save);
 document.getElementById('lighting-effect').addEventListener('change', updateLightingFieldVisibility);
 document.getElementById('calib-toggle-btn').addEventListener('click', toggleCalibration);
+document.getElementById('language-select').addEventListener('change', (e) => setLanguage(e.target.value));
 window.addEventListener('beforeunload', () => {
   if (calibrationTimer) {
     navigator.sendBeacon('/api/calibration/stop');

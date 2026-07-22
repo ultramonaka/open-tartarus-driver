@@ -91,6 +91,22 @@ fn effect_name(effect: &Effect) -> &'static str {
     }
 }
 
+/// Sends a razer_report Feature Report and logs the result: `on_success`
+/// (only evaluated if the send actually succeeds) for the success line, or
+/// `WARNING: failed to send {what} command: {e}` on failure. Shared by every
+/// lighting-related command below (effect, brightness, profile-indicator
+/// LED) so this send-then-log shape only exists once. `what` feeds directly
+/// into the WARNING text, so keep it matching what USAGE.md's
+/// troubleshooting table tells users to grep for (currently the "lighting
+/// effect"/"lighting brightness" call sites — both start with "lighting",
+/// matching USAGE.md's `WARNING: failed to send lighting ...`).
+fn send_control_command(ctrl: &hidapi::HidDevice, cmd: [u8; 91], what: &str, on_success: impl FnOnce() -> String) {
+    match ctrl.send_feature_report(&cmd) {
+        Ok(()) => println!("{}", on_success()),
+        Err(e) => eprintln!("WARNING: failed to send {what} command: {e}"),
+    }
+}
+
 /// Sends the configured effect (and brightness, if set) to Interface 2.
 /// Called once at driver startup, right alongside the device-mode-3 unlock
 /// command, using the same already-open control-device handle. Failures are
@@ -99,18 +115,14 @@ fn effect_name(effect: &Effect) -> &'static str {
 pub fn apply(ctrl: &hidapi::HidDevice, lighting: &LightingConfig) {
     let args = effect_args(&lighting.effect);
     let cmd = crate::build_razer_cmd(LIGHTING_TXN, CLASS_MATRIX, CMD_SET_EFFECT, &args);
-    match ctrl.send_feature_report(&cmd) {
-        Ok(()) => println!("Lighting: effect set to \"{}\".", effect_name(&lighting.effect)),
-        Err(e) => eprintln!("WARNING: failed to send lighting effect command: {e}"),
-    }
+    send_control_command(ctrl, cmd, "lighting effect", || {
+        format!("Lighting: effect set to \"{}\".", effect_name(&lighting.effect))
+    });
 
     if let Some(brightness) = lighting.brightness {
         let args = [ARG_VARSTORE_BACKLIGHT[0], ARG_VARSTORE_BACKLIGHT[1], brightness];
         let cmd = crate::build_razer_cmd(LIGHTING_TXN, CLASS_MATRIX, CMD_SET_BRIGHTNESS, &args);
-        match ctrl.send_feature_report(&cmd) {
-            Ok(()) => println!("Lighting: brightness set to {brightness}."),
-            Err(e) => eprintln!("WARNING: failed to send lighting brightness command: {e}"),
-        }
+        send_control_command(ctrl, cmd, "lighting brightness", || format!("Lighting: brightness set to {brightness}."));
     }
 }
 
@@ -191,14 +203,13 @@ pub struct LayerIndicatorConfig {
 pub fn set_layer_indicator(ctrl: &hidapi::HidDevice, color: &ProfileLedColor, on: bool) {
     let args = [ARG_NOSTORE, color.led_id(), on as u8];
     let cmd = crate::build_razer_cmd(LAYER_INDICATOR_TXN, CLASS_STANDARD_LED, CMD_SET_LED_STATE, &args);
-    match ctrl.send_feature_report(&cmd) {
-        Ok(()) => println!(
+    send_control_command(ctrl, cmd, "layer indicator LED", || {
+        format!(
             "Layer indicator: {} LED {}.",
             color.name(),
             if on { "on (Layer1 active)" } else { "off (Default layer)" }
-        ),
-        Err(e) => eprintln!("WARNING: failed to send layer indicator LED command: {e}"),
-    }
+        )
+    });
 }
 
 /// Parses a 6-hex-digit "RRGGBB" string (case-insensitive, no leading '#').

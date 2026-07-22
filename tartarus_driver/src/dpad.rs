@@ -417,48 +417,49 @@ fn handle_interception_mouse(
 // service). catch_unwind is kept around Interception::new() too as a
 // defense-in-depth belt-and-suspenders measure; it does not replace the
 // LoadLibraryW pre-flight, which is the actual fix.
+// All three ways Interception can be unavailable (DLL missing, driver
+// service not installed/running, or an unexpected panic from the FFI call)
+// end the same way: warn with the specific cause, then fall back to the
+// device-blind WH_KEYBOARD_LL hook so Hypershift still works (just without
+// per-device discrimination — see hypershift.rs). USAGE.md's troubleshooting
+// section tells users to grep the log for this exact trailing phrase, so it
+// must stay byte-for-byte stable across all three causes.
+fn fall_back_to_hook_based_hypershift(cause: &str) {
+    eprintln!(
+        "WARNING: {cause} (see README.md \"既知の制約\" for install steps). D-pad/wheel/\
+         middle-click remap disabled; falling back to the hook-based Hypershift detection \
+         (blocks Alt on ALL keyboards while running, see hypershift.rs for why)."
+    );
+    crate::hypershift::spawn_hypershift_hook_thread();
+}
+
 fn run_interception_thread() {
     unsafe {
-        match LoadLibraryW(w!("interception.dll")) {
-            Ok(_handle) => {} // leave loaded; falls through to Interception::new() below
-            Err(e) => {
-                eprintln!(
-                    "WARNING: interception.dll could not be loaded ({e}) — the Interception \
-                     driver does not appear to be installed (see README.md \"既知の制約\" for \
-                     install steps). D-pad/wheel/middle-click remap disabled; falling back to \
-                     the hook-based Hypershift detection (see hypershift.rs — this variant can't \
-                     tell a real keyboard's Alt from the Tartarus's, so Alt+Tab etc. from a real \
-                     keyboard will be blocked while the driver runs, unlike the Interception path)."
-                );
-                crate::hypershift::spawn_hypershift_hook_thread();
-                return;
-            }
+        if let Err(e) = LoadLibraryW(w!("interception.dll")) {
+            fall_back_to_hook_based_hypershift(&format!(
+                "interception.dll could not be loaded ({e}) — the Interception driver does not \
+                 appear to be installed"
+            ));
+            return;
         }
+        // leave the DLL loaded; falls through to Interception::new() below
     }
 
     let new_result = std::panic::catch_unwind(Interception::new);
     let ctx = match new_result {
         Ok(Some(ctx)) => ctx,
         Ok(None) => {
-            eprintln!(
-                "WARNING: Interception::new() returned None — the Interception kernel driver \
-                 does not appear to be installed/running (see README.md \"既知の制約\" for \
-                 install steps). D-pad/wheel/middle-click remap disabled; falling back to the \
-                 hook-based Hypershift detection (blocks Alt on ALL keyboards while running, see \
-                 hypershift.rs for why)."
+            fall_back_to_hook_based_hypershift(
+                "Interception::new() returned None — the Interception kernel driver does not \
+                 appear to be installed/running",
             );
-            crate::hypershift::spawn_hypershift_hook_thread();
             return;
         }
         Err(_) => {
-            eprintln!(
-                "WARNING: Interception::new() failed unexpectedly — the Interception driver is \
-                 most likely not installed or not running (see README.md \"既知の制約\" for \
-                 install steps). D-pad/wheel/middle-click remap disabled; falling back to the \
-                 hook-based Hypershift detection (blocks Alt on ALL keyboards while running, see \
-                 hypershift.rs for why)."
+            fall_back_to_hook_based_hypershift(
+                "Interception::new() failed unexpectedly — the Interception driver is most \
+                 likely not installed or not running",
             );
-            crate::hypershift::spawn_hypershift_hook_thread();
             return;
         }
     };

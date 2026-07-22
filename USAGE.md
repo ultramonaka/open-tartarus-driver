@@ -65,6 +65,27 @@ cargo run --release -- tray
 - Right-click the tray icon for a menu: "Open settings (configui)", a grayed-out "Version: vX.Y.Z" line, "Check for updates (GitHub)", and "Quit". "Open settings" opens the browser where you can edit and save key assignments (restarting `tray` mode itself is still needed to apply changes, same as normal mode). "Check for updates" just opens the public repo's Releases page in your browser — there's no automatic update check (no background network calls by design). "Quit" performs the same safe shutdown as Ctrl+C (releasing any held key, etc.) before exiting.
 - No console output — check `tasks/run.log` instead.
 
+#### Debug emulator (`emulate`), no hardware required
+
+```powershell
+.\tartarus_driver.exe emulate
+```
+
+Loads `config.toml` exactly like normal mode, but never touches HID, Interception, or the Razer control device — no Tartarus Pro needed at all. Useful for trying out a keymap/actuation change, or just poking at the hysteresis/Hypershift logic, when the device isn't at hand.
+
+Type commands and press Enter:
+
+| Command | Effect |
+|---|---|
+| `5` | tap key 5: DOWN then UP |
+| `5 down` / `5 up` | hold / release key 5 |
+| `5 140` | set key 5's raw depth directly to 140 (0-255) — handy for testing an exact `t_on`/`t_off` threshold |
+| `hyper` | toggle Hypershift, as if the Hyper Response button were pressed/released |
+| `help` | show the command list again |
+| `quit` | exit (also releases any key still held) |
+
+It sends real `SendInput` keystrokes just like normal mode, so whatever window has focus will actually receive them — keep focus on a scratch window (Notepad, etc.) while trying it out, not something you don't want to type into.
+
 ### 3. Changing key assignments
 
 Key assignments live in `config.toml` (repo root). If it doesn't exist, the driver falls back to the built-in placeholder keymap (same content as `config.example.toml`).
@@ -79,6 +100,8 @@ cargo run --release -- configui
 ```
 
 Open the URL shown in the console (`http://127.0.0.1:7878/`) in your browser. You'll see dropdowns for the 20 analog keys (Default layer and Layer1 each), the D-pad, the wheel, and middle-click — pick the keys you want and click "Save".
+
+The page itself has a language switcher (top right, English/日本語). Switching it re-translates the page immediately and is saved right away (independent of the "Save" button below) — it's remembered the next time you open `configui`, in `config.toml`'s `[configui]` section. Defaults to English.
 
 **Notes**:
 - `configui` is not the driver itself — it's only a config editor. It never reads HID data or sends keystrokes.
@@ -201,6 +224,27 @@ cargo run --release -- tray
 - タスクトレイのアイコンを右クリックすると「設定を開く (configui)」「バージョン: vX.Y.Z」(グレー表示、クリック不可)「アップデートを確認 (GitHub)」「終了」のメニューが出る。「設定を開く」でブラウザが開き、そのままキー割り当てを編集・保存できる(反映には`tray`モード自体の再起動が必要、通常起動時と同様)。「アップデートを確認」は公開リポジトリのReleasesページをブラウザで開くだけで、自動での更新チェックは行わない(バックグラウンドでの通信は一切しない設計)。「終了」を選ぶと、Ctrl+Cと同じ安全な終了処理(押しっぱなしキーの解放など)を行ってから終了する。
 - ログはコンソールに出ないため`tasks/run.log`を確認する。
 
+#### デバッグ用エミュレータ (`emulate`)、実機不要
+
+```powershell
+.\tartarus_driver.exe emulate
+```
+
+通常モードと同じく`config.toml`を読み込むが、HID・Interception・Razerコントロールデバイスには一切触れない — Tartarus Proが手元になくても動く。キーマップ/感度設定を変えて試したいときや、ヒステリシス・Hypershiftのロジックだけ触って確認したいときに使う。
+
+コマンドを入力してEnter:
+
+| コマンド | 効果 |
+|---|---|
+| `5` | key5をタップ(DOWN→UP) |
+| `5 down` / `5 up` | key5を押しっぱなし/離す |
+| `5 140` | key5の生の深度を直接140(0-255)に設定 — `t_on`/`t_off`のしきい値ちょうどをテストしたいときに便利 |
+| `hyper` | Hyper Responseボタンを押した/離したときと同じようにHypershiftを切り替える |
+| `help` | コマンド一覧を再表示 |
+| `quit` | 終了(押しっぱなしのキーがあれば解放してから終了) |
+
+通常モードと同じく本物の`SendInput`キー入力を送るため、その時フォーカスされているウィンドウに実際にキーが入力される。試す間はメモ帳など、打ち込まれても困らないウィンドウにフォーカスを置いておくこと。
+
 ### 3. キー割り当てを変える
 
 `config.toml`(リポジトリルート)にキー割り当てが書かれている。存在しない場合はビルトインのプレースホルダーキーマップ(`config.example.toml`と同じ内容)にフォールバックする。
@@ -215,6 +259,8 @@ cargo run --release -- configui
 ```
 
 コンソールに表示されるURL(`http://127.0.0.1:7878/`)をブラウザで開く。20個のアナログキー(通常レイヤー・Layer1それぞれ)、十字キー、ホイール、ホイールクリックのプルダウンが並んでいるので、割り当てたいキーを選んで「保存」を押す。
+
+ページ右上に言語切り替え(English/日本語)がある。切り替えるとその場でページ全体が翻訳され、即座に保存される(下の「保存」ボタンとは独立)。次回`configui`を開いたときも覚えている(`config.toml`の`[configui]`セクションに記録)。既定は英語。
 
 **注意点**:
 - `configui`はドライバ本体ではない。設定画面を出すだけで、HID読み取りやキー送信は一切行わない。

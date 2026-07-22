@@ -11,7 +11,7 @@
 use crate::config::{ConfigPayload, DriverConfig};
 use crate::vkname::all_key_names;
 use crate::{eprintln, println, NUM_KEYS};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::Read as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -82,6 +82,60 @@ fn read_body_capped(request: &mut tiny_http::Request) -> Result<String, String> 
     String::from_utf8(buf).map_err(|e| format!("request body is not valid UTF-8: {e}"))
 }
 
+// Reads the request body via read_body_capped, or sends the 400 error
+// response itself (consuming `request`, since tiny_http::Request::respond
+// takes it by value) and returns Err(()). Shared by /api/config and
+// /api/language's POST handlers, which otherwise duplicated this exact
+// reject-and-respond block for a body that's too large or not valid UTF-8.
+// Takes `request` by value and hands it back alongside the body on success
+// so the caller can keep using it to send its own eventual response.
+fn read_body_or_reject(mut request: tiny_http::Request) -> Result<(String, tiny_http::Request), ()> {
+    match read_body_capped(&mut request) {
+        Ok(b) => Ok((b, request)),
+        Err(e) => {
+            respond_ignore_error(
+                request.respond(json_response(format!("{{\"ok\":false,\"error\":{e:?}}}"), 400)),
+            );
+            Err(())
+        }
+    }
+}
+
+// Shared invalid-JSON response for both POST handlers below (identical
+// `{"ok":false,"error":"invalid JSON: ..."}` / 400 shape in each).
+fn respond_invalid_json(request: tiny_http::Request, e: impl std::fmt::Display) -> std::io::Result<()> {
+    request.respond(json_response(
+        format!("{{\"ok\":false,\"error\":{:?}}}", format!("invalid JSON: {e}")),
+        400,
+    ))
+}
+
+// Responds after a `ConfigPayload::validate_and_save()` call: `{"ok":true}`
+// (plus an optional one-line log, since /api/config logs a save
+// confirmation but /api/language doesn't) on success, or the same
+// `{"ok":false,"error":...}` / 400 shape (plus an `eprintln!` tagged with
+// `error_log_label`) on failure. Shared by both POST handlers below, which
+// otherwise duplicated this exact shape apart from their log wording.
+fn respond_after_save(
+    request: tiny_http::Request,
+    result: Result<(), String>,
+    success_log: Option<&str>,
+    error_log_label: &str,
+) -> std::io::Result<()> {
+    match result {
+        Ok(()) => {
+            if let Some(msg) = success_log {
+                println!("{msg}");
+            }
+            request.respond(json_response("{\"ok\":true}".to_string(), 200))
+        }
+        Err(msg) => {
+            eprintln!("configui: {error_log_label}: {msg}");
+            request.respond(json_response(format!("{{\"ok\":false,\"error\":{msg:?}}}"), 400))
+        }
+    }
+}
+
 fn header(name: &str, value: &str) -> Header {
     Header::from_bytes(name.as_bytes(), value.as_bytes()).expect("static header name/value is always valid ASCII")
 }
@@ -120,18 +174,24 @@ struct CalibrationLive {
     depths: Vec<u8>,
 }
 
-// Same VID/PID/usage filtering as main.rs's open_analog_devices, but never
-// calls std::process::exit on failure — that function is fine for the
-// normal driver's fail-fast CLI startup, but this runs inside the long-lived
-// configui web server, where "Tartarus not plugged in" must fail soft (log
-// a warning, leave the server itself running) rather than take the whole
-// page down.
+// Body of POST /api/language — a lightweight sibling to /api/config so
+// switching the page's display language doesn't require resubmitting (or
+// re-validating) the entire keymap/lighting/etc. form, and doesn't clobber
+// any of the user's still-unsaved edits in the browser: it reads the
+// currently-saved config.toml fresh, overwrites just the language field, and
+// writes it back through the same validated save path as the main form.
+#[derive(Deserialize)]
+struct LanguagePayload {
+    language: String,
+}
+
+// Uses main.rs's shared analog_device_infos() filter, but never calls
+// std::process::exit on failure — that's fine for the normal driver's
+// fail-fast CLI startup, but this runs inside the long-lived configui web
+// server, where "Tartarus not plugged in" must fail soft (log a warning,
+// leave the server itself running) rather than take the whole page down.
 fn try_open_analog_devices(api: &hidapi::HidApi) -> Vec<(i32, hidapi::HidDevice)> {
-    api.device_list()
-        .filter(|d| d.vendor_id() == crate::VID && d.product_id() == crate::PID)
-        .filter(|d| !(d.usage_page() == 0x0001 && (d.usage() == 0x0002 || d.usage() == 0x0006)))
-        .cloned()
-        .collect::<Vec<_>>()
+    crate::analog_device_infos(api)
         .iter()
         .filter_map(|info| {
             let device = info.open_device(api).ok()?;
@@ -204,7 +264,7 @@ pub fn run_configui_server() {
     }
 }
 
-fn handle_request(mut request: tiny_http::Request) {
+fn handle_request(request: tiny_http::Request) {
     if !request_origin_is_trusted(&request) {
         eprintln!(
             "configui: 信頼できないHost/Originからのリクエストを拒否しました \
@@ -255,32 +315,29 @@ fn handle_request(mut request: tiny_http::Request) {
             }
         }
         (Method::Post, "/api/config") => {
-            let body = match read_body_capped(&mut request) {
-                Ok(b) => b,
-                Err(e) => {
-                    return respond_ignore_error(
-                        request.respond(json_response(format!("{{\"ok\":false,\"error\":{e:?}}}"), 400)),
-                    );
-                }
-            };
+            let Ok((body, request)) = read_body_or_reject(request) else { return };
             match serde_json::from_str::<ConfigPayload>(&body) {
-                Ok(payload) => match payload.validate_and_save() {
-                    Ok(()) => {
-                        println!(
-                            "configui: config.toml を更新しました。tartarus_driver \
-                             を再起動すると新しい割り当てが反映されます。"
-                        );
-                        request.respond(json_response("{\"ok\":true}".to_string(), 200))
-                    }
-                    Err(msg) => {
-                        eprintln!("configui: 保存エラー: {msg}");
-                        request.respond(json_response(format!("{{\"ok\":false,\"error\":{msg:?}}}"), 400))
-                    }
-                },
-                Err(e) => request.respond(json_response(
-                    format!("{{\"ok\":false,\"error\":{:?}}}", format!("invalid JSON: {e}")),
-                    400,
-                )),
+                Ok(payload) => respond_after_save(
+                    request,
+                    payload.validate_and_save(),
+                    Some(
+                        "configui: config.toml を更新しました。tartarus_driver を再起動すると新しい割り当てが反映されます。",
+                    ),
+                    "保存エラー",
+                ),
+                Err(e) => respond_invalid_json(request, e),
+            }
+        }
+        (Method::Post, "/api/language") => {
+            let Ok((body, request)) = read_body_or_reject(request) else { return };
+            match serde_json::from_str::<LanguagePayload>(&body) {
+                Ok(lang) => {
+                    let cfg: DriverConfig = crate::config::load();
+                    let mut payload = ConfigPayload::from_driver_config(&cfg);
+                    payload.language = lang.language;
+                    respond_after_save(request, payload.validate_and_save(), None, "言語設定の保存エラー")
+                }
+                Err(e) => respond_invalid_json(request, e),
             }
         }
         _ => request.respond(Response::from_string("Not Found").with_status_code(404)),

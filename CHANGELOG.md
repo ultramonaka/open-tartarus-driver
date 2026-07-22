@@ -7,6 +7,13 @@
 <a name="english"></a>
 ## English
 
+### v1.0.4
+
+- **Added**: a language switcher (English/日本語) to the `configui` web page, top right. Switching it re-translates the page immediately and saves right away, independent of the main "Save" button. The choice is remembered across restarts, in `config.toml`'s new `[configui]` section (defaults to English).
+- **Added**: an `emulate` subcommand — a hardware-free debug mode for trying out the hysteresis/keymap/Hypershift-layer logic from a terminal, with no Tartarus Pro, Interception, or Razer control device needed. See `USAGE.md` for the command list.
+- **Documented**: added `configui` screenshots to `README.md`; refreshed `Purpose.md`'s architecture writeup (thread/process layout, and every feature added since the last update) to match the current codebase.
+- Internal cleanup (`config.rs`, `main.rs`, `dpad.rs`, `configui.rs`, `lighting.rs`): removed several duplicated code blocks with no behavior change, and added unit test coverage for `emulate.rs`'s command parsing/dispatch.
+
 ### v1.0.3
 
 - **Added**: a non-affiliation/trademark disclaimer to `README.md` ("Razer" and "Tartarus" are trademarks of Razer Inc.; this project is not affiliated with, endorsed by, or supported by Razer Inc.).
@@ -29,6 +36,13 @@ Initial public release.
 
 <a name="japanese"></a>
 ## 日本語
+
+### v1.0.4
+
+- **追加**: `configui`のWebページ右上に言語切り替え(English/日本語)を追加。切り替えるとその場でページ全体が翻訳され、下の「保存」ボタンとは独立して即座に保存される。選択した言語は`config.toml`の新セクション`[configui]`に記録され、次回起動時も覚えている(既定は英語)。
+- **追加**: `emulate`サブコマンド — Tartarus Pro本体・Interception・Razerコントロールデバイスを一切使わず、ターミナルからヒステリシス判定・キーマップ・Hypershiftレイヤー切替のロジックを試せるデバッグ用モード。コマンド一覧は`USAGE.md`参照。
+- **ドキュメント追加**: `README.md`に`configui`のスクリーンショットを追加。`Purpose.md`のアーキテクチャ記述(スレッド/プロセス構成、前回更新以降に追加した各機能)を現在のコードに合わせて全面的に最新化。
+- 内部整理(`config.rs`/`main.rs`/`dpad.rs`/`configui.rs`/`lighting.rs`): 挙動に影響しない重複コードの整理をいくつか実施し、`emulate.rs`のコマンド解析・振り分けにユニットテストを追加。
 
 ### v1.0.3
 
