@@ -3,7 +3,7 @@
 **[English](#english)** | **[日本語](#japanese)**
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.5-informational.svg)
+![Version](https://img.shields.io/badge/version-1.0.5.1-informational.svg)
 ![Author](https://img.shields.io/badge/author-ultramonaka-lightgrey.svg)
 
 ---
@@ -83,6 +83,8 @@ To solve this, D-pad/wheel/middle-click remapping (and Hypershift's Alt detectio
 4. Copy `library\x64\interception.dll` from the extracted zip into the **same folder as `tartarus_driver.exe`** (this step is easy to miss — without it, the kernel driver installs fine but `tartarus_driver` still can't load `interception.dll` and silently falls back)
 
 If any of this isn't done, `tartarus_driver` prints a warning and disables only the D-pad/wheel/middle-click remap; a real keyboard's Alt+Tab will be blocked while the driver runs. Everything else (analog keys, key remapping) keeps working normally either way (confirmed on real hardware, no crash).
+
+**Anti-cheat-protected games may ignore this driver's input, or refuse to launch at all.** This driver sends keystrokes via Windows' `SendInput` API — the same mechanism virtually every keyboard remapping/macro tool uses — which carries an OS-level "synthetic input" signal that some anti-cheat engines specifically detect and discard, independent of administrator privileges (this is a deliberate anti-cheat policy decision, not a Windows permission issue admin rights can override). Third-party kernel drivers like Interception have also been reported to trigger some anti-cheat engines' launch-block checks. **Confirmed on real hardware**: Valorant (Riot Vanguard) accepts this driver's input normally; Apex Legends (Easy Anti-Cheat) does not. There is no reliable way around this for an EAC-protected title — it's intentional anti-cheat design, and reports even of stripping the OS-level injected-input flag before it reaches the game were still blocked. Because anti-cheat systems generally can't distinguish a legitimate hardware remapper from a macro/cheat tool at this level (the underlying technique is identical either way), using this driver with anti-cheat-protected competitive games may also carry account-suspension risk — use your own judgment per title.
 
 ### License
 
@@ -167,6 +169,8 @@ Synapseは不要。起動時に自動でアナログストリームの有効化�
 4. 展開したzip内の`library\x64\interception.dll`を、**`tartarus_driver.exe`と同じフォルダ**にコピーする(見落としやすい手順。これをしないと、カーネルドライバは入っていても`tartarus_driver`が`interception.dll`を読み込めず、気づかないうちにフォールバック動作になる)
 
 いずれかが未完了の場合、`tartarus_driver`は警告を表示してD-pad/ホイール/ホイールクリックのリマップだけを無効化し、実キーボードのAlt+Tabもドライバ動作中はブロックされる。それ以外(アナログキー・キーリマップ)はどちらの場合も正常に動作を続ける(クラッシュしない、実機で確認済み)。
+
+**アンチチート導入済みのゲームでは、本ドライバの入力が無視される、またはゲーム自体が起動しないことがある。** 本ドライバはWindowsの`SendInput` API(キーボードリマップ・マクロツールのほぼ全てが使う仕組み)でキー入力を送信しているが、これにはOSレベルで「合成された入力である」ことを示す情報が付随しており、一部のアンチチートエンジンはこれを検知して意図的に無視する — これは管理者権限では回避できない(Windowsの権限問題ではなく、アンチチート側の意図的な設計判断のため)。サードパーティのカーネルドライバ(Interception等)自体がアンチチートの起動ブロック判定のトリガーになったという報告もある。**実機で確認済み**: Valorant(Riot Vanguard)は本ドライバの入力を正常に受け付けるが、Apex Legends(Easy Anti-Cheat)は受け付けない。EAC保護下のタイトルに対する確実な回避策は無い(意図的なアンチチート設計であり、OSレベルの「注入フラグ」を剥がす試みですらブロックされ続けたという報告もある)。アンチチート側は「正規のハードウェアリマップツール」と「マクロ/チートツール」をこのレベルでは区別できないため(内部的に使う技術が同一のため)、アンチチート導入済みの競技性の高いゲームで本ドライバを使うことはアカウント停止のリスクも伴い得る — タイトルごとにご自身の判断で利用してください。
 
 ### ライセンス
 

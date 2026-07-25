@@ -7,6 +7,10 @@
 <a name="english"></a>
 ## English
 
+### v1.0.5.1
+
+- **Documented**: anti-cheat-protected games may ignore this driver's input or refuse to launch while it's running (confirmed: Valorant/Vanguard works, Apex Legends/Easy Anti-Cheat does not, admin privileges don't change this) — added to README's "Known limitation" section and a new USAGE.md section, with an account-risk note. Docs-only patch release.
+
 ### v1.0.5
 
 - **Added**: Hyper Shift (the "Hyper Response" thumb button) is now fully configurable via `config.toml`'s new `[hypershift]` section (or `configui`'s new "Hyper Shift" panel). `mode` chooses between `"layer_switch"` (the button drives the analog keymap layers) or `"modifier_key"` (the button just sends a plain key, default Alt — no layer switching at all). When in `layer_switch` mode, `switch_style` chooses `"momentary"` (default, original behavior — held selects Layer1, released returns to Default) or `"toggle"` (every press advances one layer instead). `layer_count` (2 or 3, toggle mode only) adds a third layer, `[keys.layer2]`. The default config (`layer_switch` + `momentary`) behaves identically to every prior version.
@@ -43,6 +47,10 @@ Initial public release.
 
 <a name="japanese"></a>
 ## 日本語
+
+### v1.0.5.1
+
+- **ドキュメント追加**: アンチチート導入済みのゲームでは本ドライバの入力が無視される、またはゲーム自体が起動しないことがある旨を明記(実機確認: Valorant/Vanguardは動作するが、Apex Legends/Easy Anti-Cheatは動作せず、管理者権限でも変わらない)。README「既知の制約」節とUSAGE.mdの新設セクションに、アカウント停止リスクの注意とあわせて追記。ドキュメントのみのパッチリリース。
 
 ### v1.0.5
 

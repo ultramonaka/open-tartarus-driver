@@ -164,11 +164,16 @@ While a non-Default layer is active, Alt itself is never sent to the OS (the but
 
 **Known limitation (only when Interception isn't installed)**: if the Interception driver isn't available, the driver automatically falls back to the old `WH_KEYBOARD_LL` hook. In that case device discrimination isn't possible, so the "real keyboard's Alt gets blocked too" limitation returns (look for `falling back to the hook-based Hypershift detection` in the startup log). If there's no reason not to, installing Interception (see `README.md`) is recommended.
 
-### 7. Troubleshooting
+### 7. Anti-cheat-protected games
+
+Some games ignore this driver's input entirely, or refuse to launch while it's running — **confirmed on real hardware**: Valorant (Riot Vanguard) works fine, Apex Legends (Easy Anti-Cheat) does not accept any input from this driver. Administrator privileges don't change this. The cause is intentional anti-cheat behavior, not a bug in this driver: `SendInput` (how this driver, and virtually every remapping/macro tool, sends keystrokes) carries an OS-level "synthetic input" signal that some anti-cheat engines specifically detect and discard; third-party kernel drivers like Interception have also been reported to trigger some engines' launch-block checks. There is no reliable workaround for an EAC-protected title — this is deliberate anti-cheat design (see README's "Known limitation" section for more detail, including an account-risk note). If a specific game doesn't respond to this driver, this is almost certainly why — it's not worth spending time debugging further.
+
+### 8. Troubleshooting
 
 | Symptom | Check |
 |---|---|
 | Analog keys do nothing | Confirm Synapse's GUI is really closed (`Get-Process \| Where ProcessName -match 'Razer\|Synapse'` should show no GUI-looking process). Unplugging/replugging the device can also help |
+| Analog keys work in Notepad/most apps but not in one specific game | Likely that game's anti-cheat blocking synthetic input — see section 7 above. Not fixable from this driver's side |
 | D-pad/wheel still act as native arrow keys/scroll too (double input) | Check the startup log for `WARNING: interception.dll could not be loaded` or `Interception::new() returned None`. The former usually means the kernel driver is installed but `interception.dll` itself wasn't copied next to `tartarus_driver.exe` (step 4 in README's "Known limitation") — this is easy to miss since the kernel driver install alone doesn't produce any error, just this fallback |
 | Saved in `configui` but nothing changed | Confirm you restarted the normal (or `tray`-mode) driver — there's no auto-reload |
 | No tray icon in `tray` mode | Check `tasks/run.log` for `[tray] WARNING: ...` (window class registration / window creation / icon add failure). Right after an Explorer restart, try relaunching `tray` |
@@ -338,11 +343,16 @@ reactive_speed = 2       # 1-4、reactiveで使用
 
 **既知の制約(Interception未インストール時のみ)**: Interceptionドライバが利用できない場合に限り、旧`WH_KEYBOARD_LL`フックへ自動的にフォールバックする。この場合はデバイス判別ができないため、上記の「実キーボードのAltも道連れでブロックされる」制約が復活する(起動時ログに`falling back to the hook-based Hypershift detection`と出ていれば該当)。Interceptionを未インストールのままにする理由がなければ、`README.md`の手順でインストールしておくことを推奨。
 
-### 7. トラブルシューティング
+### 7. アンチチート導入済みのゲームについて
+
+一部のゲームでは本ドライバの入力が全く効かない、またはドライバを動かしたままだとゲーム自体が起動しないことがある — **実機で確認済み**: Valorant(Riot Vanguard)は問題なく動作するが、Apex Legends(Easy Anti-Cheat)は本ドライバからの入力を一切受け付けない。管理者権限にしても変わらない。これは本ドライバの不具合ではなく、意図的なアンチチートの仕様: `SendInput`(本ドライバ、および事実上全てのリマップ/マクロツールが使うキー送信の仕組み)にはOSレベルで「合成された入力」であることを示す情報が付随しており、一部のアンチチートエンジンはこれを検知して意図的に無視する。Interceptionのようなサードパーティ製カーネルドライバ自体が、一部のエンジンの起動ブロック判定のトリガーになったという報告もある。EAC保護下のタイトルに対する確実な回避策は無い(意図的なアンチチート設計のため。詳細とアカウントリスクについての注意はREADME.mdの「既知の制約」参照)。特定のゲームだけ本ドライバに反応しない場合、ほぼ確実にこれが原因であり、それ以上デバッグしても解決しない。
+
+### 8. トラブルシューティング
 
 | 症状 | 確認すること |
 |---|---|
 | アナログキーが何も反応しない | Synapseのタスクトレイアイコンが本当に閉じているか確認(`Get-Process \| Where ProcessName -match 'Razer\|Synapse'`でGUIプロセスが出ないこと)。デバイスの抜き差しも有効な場合がある |
+| メモ帳など大抵のアプリでは動くが特定のゲームだけ反応しない | そのゲームのアンチチートが合成入力をブロックしている可能性が高い — 上記7を参照。本ドライバ側での解決策は無い |
 | 十字キー/ホイールが元の矢印キー・スクロールとしても動いてしまう(二重入力) | 起動時ログに`WARNING: interception.dll could not be loaded`または`Interception::new() returned None`と出ていないか確認。前者は多くの場合、カーネルドライバは入っているが`interception.dll`自体が`tartarus_driver.exe`と同じフォルダにコピーされていない状態(README「既知の制約」の手順4)。カーネルドライバのインストールだけではエラーが出ないため見落としやすい |
 | `configui`で保存したのに反映されない | 通常起動(または`tray`モード)のドライバを再起動したか確認(自動リロードはしない) |
 | `tray`モードでタスクトレイにアイコンが出ない | `tasks/run.log`に`[tray] WARNING: ...`が出ていないか確認(ウィンドウクラス登録・ウィンドウ作成・アイコン追加のいずれかの失敗)。Explorerの再起動直後などは再度`tray`を起動し直す |
