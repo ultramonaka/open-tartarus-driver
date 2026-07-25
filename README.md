@@ -3,7 +3,7 @@
 **[English](#english)** | **[日本語](#japanese)**
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.4-informational.svg)
+![Version](https://img.shields.io/badge/version-1.0.5-informational.svg)
 ![Author](https://img.shields.io/badge/author-ultramonaka-lightgrey.svg)
 
 ---
@@ -18,15 +18,15 @@
 ### Features
 
 - **Full analog key support** — reads the raw 0-255 depth of all 20 keys directly over HID and converts it to keystrokes with hysteresis-based actuation (no chattering)
-- **Fully remappable, no recompiling** — every key, the D-pad, the wheel, and middle-click can be reassigned from a browser-based config page (`configui`), including a **live sensitivity calibration view** and **per-key actuation thresholds**
+- **Fully remappable, no recompiling** — every key, the D-pad, the wheel, and middle-click can be reassigned from a browser-based config page (`configui`), including a **live sensitivity calibration view**, **per-key actuation thresholds**, and **media/volume keys** as a separate picker category
 - **D-pad / wheel / middle-click remap** at the kernel level (via [Interception](https://github.com/oblitum/Interception)) — a real keyboard/mouse plugged in at the same time is never affected
-- **Hypershift**: a temporary second key layer while the "Hyper Response" thumb button is held, with no side effects on a real keyboard's Alt+Tab
+- **Hyper Shift**: the "Hyper Response" thumb button, fully configurable — either a layer-switch trigger (momentary hold, or toggle cycling through 2-3 layers) or a plain modifier key passthrough (default Alt), with no side effects on a real keyboard's Alt+Tab
 - **LED lighting control** — static color, breathing, spectrum, wave, and reactive effects
 - **Runs in the background indefinitely**, optionally from a system tray icon (`tray` mode) with no console window
 
 ### Screenshots
 
-`configui`, the browser-based config page — remap every analog key on two layers (Default and the Hypershift layer):
+`configui`, the browser-based config page — remap every analog key across up to 3 layers (Default/Layer1/Layer2), configure Hyper Shift's mode, and pick media/volume keys from their own category:
 
 ![configui: key remap settings](img/configgui_1.png)
 
@@ -34,11 +34,16 @@ Live sensitivity calibration — watch each key's raw depth in real time while d
 
 ![configui: live calibration](img/configgui_2.png)
 
+Media/volume keys as their own category in the key picker — here the wheel and middle-click are remapped to Volume Up/Down and Play/Pause:
+
+![configui: media control key picker](img/configgui_3.png)
+
 ### Requirements
 
 - Windows 10/11
 - A Razer Tartarus Pro
-- The [Interception](https://github.com/oblitum/Interception) driver — optional, but required for D-pad/wheel/middle-click remapping and for Hypershift to avoid affecting a real keyboard's Alt key (see "Known limitation" below)
+- The [Interception](https://github.com/oblitum/Interception) driver — optional, but required for D-pad/wheel/middle-click remapping and for Hyper Shift to avoid affecting a real keyboard's Alt key (see "Known limitation" below)
+- **Razer Synapse must be fully closed (task-killed) before running `tartarus_driver`, every time** — right-click its tray icon and quit, or end its GUI process (`RzSynapse`/`RazerCentral`-type process) via Task Manager; its background services can stay running, that's fine. If Synapse's GUI is still running at the same time, it independently injects its own key bindings for the exact same physical input, causing double input (see `USAGE.md`'s Troubleshooting section).
 
 ### Download
 
@@ -97,15 +102,15 @@ Licensed under the **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
 ### 主な機能
 
 - **アナログキー20個をフルサポート** — HID経由で各キーの押し込み深度(0-255)を直接読み取り、ヒステリシス判定でチャタリングなくキー入力に変換
-- **再コンパイル不要のフルリマップ** — 全キー、十字キー、ホイール、中クリックをブラウザの設定画面(`configui`)から再割り当て可能。**リアルタイム感度キャリブレーション**と**キー個別の感度設定**にも対応
+- **再コンパイル不要のフルリマップ** — 全キー、十字キー、ホイール、中クリックをブラウザの設定画面(`configui`)から再割り当て可能。**リアルタイム感度キャリブレーション**、**キー個別の感度設定**、**メディア/音量キー**(専用カテゴリから選択)にも対応
 - **十字キー・ホイール・中クリックのカーネルレベルリマップ**([Interception](https://github.com/oblitum/Interception)経由) — 同時に接続している実キーボード・実マウスには一切影響しない
-- **Hypershift** — 「Hyper Response」サムボタンを押している間だけ有効になる一時的な第2レイヤー。実キーボードのAlt+Tabに副作用なし
+- **ハイパーシフト** — 「Hyper Response」サムボタンの動作を設定可能。レイアウト切替(モーメンタリ=押している間、またはトグル=押すたびに2〜3レイヤーを巡回)か、普通の修飾キー(既定Alt)としてそのまま送信するかを選べる。実キーボードのAlt+Tabに副作用なし
 - **LEDライティング制御** — 単色・呼吸・スペクトラム・ウェーブ・リアクティブの各エフェクト
 - **無期限のバックグラウンド実行**、コンソール窓を出さないタスクトレイモード(`tray`)にも対応
 
 ### スクリーンショット
 
-`configui`(ブラウザの設定画面)— 全アナログキーを2レイヤー(通常・Hypershiftレイヤー)分リマップできる:
+`configui`(ブラウザの設定画面)— 全アナログキーを最大3レイヤー(通常/Layer1/Layer2)分リマップし、ハイパーシフトのモードやメディア/音量キーもカテゴリから選択できる:
 
 ![configui: キー割り当て設定](img/configgui_1.png)
 
@@ -113,11 +118,16 @@ Licensed under the **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
 
 ![configui: ライブキャリブレーション](img/configgui_2.png)
 
+キーピッカーの「メディア操作」カテゴリ — ここではホイールと中クリックを音量上げ/下げ・再生一時停止に割り当てている:
+
+![configui: メディア操作キーピッカー](img/configgui_3.png)
+
 ### 動作環境
 
 - Windows 10/11
 - Razer Tartarus Pro本体
-- [Interception](https://github.com/oblitum/Interception)ドライバ — 任意だが、十字キー/ホイール/中クリックのリマップと、Hypershiftが実キーボードのAltに影響しないようにするために必要(下記「既知の制約」参照)
+- [Interception](https://github.com/oblitum/Interception)ドライバ — 任意だが、十字キー/ホイール/中クリックのリマップと、ハイパーシフトが実キーボードのAltに影響しないようにするために必要(下記「既知の制約」参照)
+- **`tartarus_driver`を起動する前に、毎回必ずRazer Synapseを完全に終了(タスクキル)しておくこと** — タスクトレイのアイコンを右クリックして終了するか、タスクマネージャーでGUIプロセス(`RzSynapse`/`RazerCentral`系)を終了する(バックグラウンドサービス自体は残っていて問題ない)。Synapseのアプリ本体が起動したままだと、同じ物理入力に対してSynapse自身も独自のキー割り当てを注入してしまい、二重入力になる(詳細は`USAGE.md`のトラブルシューティング参照)。
 
 ### ダウンロード
 

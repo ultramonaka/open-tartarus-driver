@@ -70,6 +70,30 @@
     color: var(--text);
     font-size: 0.92rem;
   }
+  .key-picker {
+    display: flex;
+    gap: 0.3rem;
+  }
+  .key-picker .key-cat {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 6.5rem;
+  }
+  .key-picker .key-val {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  th.layer-col-unreachable,
+  td.layer-col-unreachable {
+    opacity: 0.4;
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+  }
   .grid4 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -150,13 +174,46 @@
   </p>
 
   <div class="panel">
+    <h2 data-i18n="panelHypershift">Hyper Shift</h2>
+    <div class="grid4">
+      <div class="field">
+        <label data-i18n="labelHypershiftMode">Mode</label>
+        <select id="hypershift-mode">
+          <option value="layer_switch" data-i18n="optModeLayerSwitch">Layout Switch</option>
+          <option value="modifier_key" data-i18n="optModeModifierKey">Modifier Key</option>
+        </select>
+      </div>
+      <div class="field" id="hypershift-switch-style-field">
+        <label data-i18n="labelHypershiftSwitchStyle">Switch Style</label>
+        <select id="hypershift-switch-style">
+          <option value="momentary" data-i18n="optStyleMomentary">Momentary (hold)</option>
+          <option value="toggle" data-i18n="optStyleToggle">Toggle (press to cycle)</option>
+        </select>
+      </div>
+      <div class="field" id="hypershift-layer-count-field">
+        <label data-i18n="labelHypershiftLayerCount">Layers</label>
+        <select id="hypershift-layer-count">
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </div>
+      <div class="field" id="hypershift-modifier-key-field">
+        <label data-i18n="labelHypershiftModifierKey">Modifier Key</label>
+        <div id="slot-hypershift-modifier-key"></div>
+      </div>
+    </div>
+    <p class="hint" data-i18n-html="hintHypershiftHtml"></p>
+  </div>
+
+  <div class="panel">
     <h2 data-i18n="panelAnalog">Analog Keys (20 keys)</h2>
     <table>
       <thead>
         <tr>
           <th data-i18n="thKey">Key</th>
           <th data-i18n="thDefaultLayer">Default Layer</th>
-          <th data-i18n="thLayer1">Layer1 (while Hyper Response is held)</th>
+          <th data-i18n="thLayer1" data-layer="1">Layer1</th>
+          <th data-i18n="thLayer2" data-layer="2">Layer2</th>
         </tr>
       </thead>
       <tbody id="analog-body"></tbody>
@@ -289,7 +346,20 @@ const I18N = {
     panelAnalog: "Analog Keys (20 keys)",
     thKey: "Key",
     thDefaultLayer: "Default Layer",
-    thLayer1: "Layer1 (while Hyper Response is held)",
+    thLayer1: "Layer1",
+    thLayer2: "Layer2",
+    catBasic: "Basic",
+    catMedia: "Media Control",
+    panelHypershift: "Hyper Shift",
+    labelHypershiftMode: "Mode",
+    optModeLayerSwitch: "Layout Switch",
+    optModeModifierKey: "Modifier Key",
+    labelHypershiftSwitchStyle: "Switch Style",
+    optStyleMomentary: "Momentary (hold)",
+    optStyleToggle: "Toggle (press to cycle)",
+    labelHypershiftLayerCount: "Layers",
+    labelHypershiftModifierKey: "Modifier Key",
+    hintHypershiftHtml: 'Controls what the physical "Hyper Response" thumb button does. <b>Layout Switch</b> uses it to switch which of the Analog Keys table\'s columns below is active: <b>Momentary</b> (default) behaves as before — held selects Layer1, released returns to Default. <b>Toggle</b> instead advances one layer every press (Default → Layer1 → Layer2 → Default… for 3 layers, or Default ↔ Layer1 for 2), and ignores release. <b>Modifier Key</b> disables layer switching entirely and just sends the chosen key (default Alt) on press/release, like any other key. Layer columns that aren\'t currently reachable are shown hatched below. The "Layer Indicator" panel further down reflects the active layer only in Layout Switch mode.',
     panelSensitivity: "Sensitivity (Actuation Point)",
     labelTOn: "Default t_on (press threshold, deeper)",
     labelTOff: "Default t_off (release threshold, shallower)",
@@ -332,7 +402,7 @@ const I18N = {
     optColorRed: "Red",
     optColorGreen: "Green",
     optColorBlue: "Blue",
-    hintLayerIndicatorHtml: 'When enabled, the side indicator LED lights up only while the Hyper Response button is held (Layer1 active), and turns off when released. This is a separate LED (one of the 3 side LEDs) from the main key lighting panel above, so it doesn\'t interfere with effects like Spectrum. OpenRazer itself doesn\'t implement this for the Tartarus Pro either, so it\'s unverified on real hardware (research-based, see <code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>). If it doesn\'t light up, check <code>tasks/run.log</code> for <code>WARNING: failed to send layer indicator ...</code>.',
+    hintLayerIndicatorHtml: 'When enabled, the side indicator LED lights up whenever a non-Default layer (Layer1/Layer2) is active — in the "Hyper Shift" panel above, this means Momentary while held, or Toggle whenever it has cycled away from Default — and turns off on Default. Not used at all in Modifier Key mode (the layer never changes). This is a separate LED (one of the 3 side LEDs) from the main key lighting panel above, so it doesn\'t interfere with effects like Spectrum. OpenRazer itself doesn\'t implement this for the Tartarus Pro either, so it\'s unverified on real hardware (research-based, see <code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>). If it doesn\'t light up, check <code>tasks/run.log</code> for <code>WARNING: failed to send layer indicator ...</code>.',
     btnSave: "Save",
     statusSaving: "Saving...",
     statusSaved: "Saved. Restart tartarus_driver to apply.",
@@ -348,7 +418,20 @@ const I18N = {
     panelAnalog: "アナログキー (20キー)",
     thKey: "キー",
     thDefaultLayer: "通常レイヤー",
-    thLayer1: "Layer1 (Hyper Response押下時)",
+    thLayer1: "Layer1",
+    thLayer2: "Layer2",
+    catBasic: "基本",
+    catMedia: "メディア操作",
+    panelHypershift: "ハイパーシフト",
+    labelHypershiftMode: "モード",
+    optModeLayerSwitch: "レイアウト切替",
+    optModeModifierKey: "修飾キー",
+    labelHypershiftSwitchStyle: "切替方式",
+    optStyleMomentary: "モーメンタリ(押している間)",
+    optStyleToggle: "トグル(押すたびに切替)",
+    labelHypershiftLayerCount: "レイヤー数",
+    labelHypershiftModifierKey: "修飾キー",
+    hintHypershiftHtml: '物理的な「Hyper Response」親指ボタンの動作を設定する。<b>レイアウト切替</b>を選ぶと、下の「アナログキー」表のどの列が有効になるかをこのボタンで切り替える: <b>モーメンタリ</b>(既定)は従来どおり — 押している間はLayer1、離すと通常レイヤーに戻る。<b>トグル</b>は押すたびに1レイヤーずつ進む(3レイヤーなら 通常→Layer1→Layer2→通常…、2レイヤーなら 通常⇔Layer1)。離す動作は無視される。<b>修飾キー</b>を選ぶとレイアウト切替は一切行わず、選択したキー(既定はAlt)を押下/解放時にそのまま送信する、通常のキーと同じ動作になる。現在の設定では到達できないレイヤー列は下でハッチング表示される。さらに下の「レイヤーインジケータ」パネルは、レイアウト切替モードの時のみ現在のレイヤーを反映する。',
     panelSensitivity: "感度 (アクチュエーションポイント)",
     labelTOn: "既定値 t_on (押下判定・深く)",
     labelTOff: "既定値 t_off (解放判定・浅く)",
@@ -391,7 +474,7 @@ const I18N = {
     optColorRed: "赤",
     optColorGreen: "緑",
     optColorBlue: "青",
-    hintLayerIndicatorHtml: '有効にすると、側面のインジケータLEDが Hyper Response ボタンを押している間(Layer1有効時)だけ点灯し、離すと消灯する。上の「ライティング (LED)」パネルのメインキー照明とは別系統のLED(側面の3灯のうち1つ)なので、スペクトラム等のメイン照明を邪魔しない。このプロトコルはOpenRazer自体もTartarus Proでは未実装のため実機で未検証(調査ベース、<code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>参照)。光らない場合は<code>tasks/run.log</code>の<code>WARNING: failed to send layer indicator ...</code>を確認。',
+    hintLayerIndicatorHtml: '有効にすると、側面のインジケータLEDが通常レイヤー以外(Layer1/Layer2)が有効な間点灯し、通常レイヤーに戻ると消灯する — 上の「ハイパーシフト」パネルでモーメンタリなら押している間、トグルなら通常レイヤーから切り替わっている間。修飾キーモードでは一切使われない(レイヤーが変化しないため)。上の「ライティング (LED)」パネルのメインキー照明とは別系統のLED(側面の3灯のうち1つ)なので、スペクトラム等のメイン照明を邪魔しない。このプロトコルはOpenRazer自体もTartarus Proでは未実装のため実機で未検証(調査ベース、<code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>参照)。光らない場合は<code>tasks/run.log</code>の<code>WARNING: failed to send layer indicator ...</code>を確認。',
     btnSave: "保存",
     statusSaving: "保存中...",
     statusSaved: "保存しました。反映するには tartarus_driver を再起動してください。",
@@ -404,7 +487,7 @@ const I18N = {
 };
 
 let currentLang = 'en';
-let KEY_OPTIONS = [];
+let KEY_CATEGORIES = { basic: [], media: [] };
 
 function applyLanguage(lang) {
   if (!I18N[lang]) lang = 'en';
@@ -434,33 +517,82 @@ async function setLanguage(lang) {
   }
 }
 
-function makeSelect(id, currentValue) {
-  const sel = document.createElement('select');
-  sel.id = id;
-  for (const name of KEY_OPTIONS) {
+// "basic" if currentValue isn't in KEY_CATEGORIES.media — including an
+// unrecognized value, same defensive-fallback spirit as the "unknown key"
+// option below.
+function categoryOf(value) {
+  return KEY_CATEGORIES.media.includes(value) ? 'media' : 'basic';
+}
+
+// Fills a key-value <select> from one category's list, pre-selecting
+// currentValue if given and present. If currentValue is given but absent
+// from the list (either it's genuinely unrecognized, or the user just
+// switched category and the old value doesn't exist in the new one), adds a
+// defensive "(unknown key)" option instead of silently substituting the
+// first entry — same behavior makeSelect had before the category split.
+function fillKeyValueOptions(valSelect, category, currentValue) {
+  valSelect.replaceChildren();
+  const list = KEY_CATEGORIES[category] || [];
+  for (const name of list) {
     const opt = document.createElement('option');
     opt.value = name;
     opt.textContent = name;
     if (name === currentValue) opt.selected = true;
-    sel.appendChild(opt);
+    valSelect.appendChild(opt);
   }
-  if (!KEY_OPTIONS.includes(currentValue)) {
-    // Defensive: config.toml/driver could in principle report a name this
-    // page's vocabulary doesn't include (e.g. hand-edited to something the
-    // driver's vk_to_name() hex-fallback produced). Surface it rather than
-    // silently substituting the first option.
+  if (currentValue != null && !list.includes(currentValue)) {
     const opt = document.createElement('option');
     opt.value = currentValue;
     opt.textContent = currentValue + ' ' + I18N[currentLang].unknownKeySuffix;
     opt.selected = true;
-    sel.appendChild(opt);
+    valSelect.appendChild(opt);
   }
-  return sel;
 }
 
-function fillSlot(slotId, selectId, value) {
+// Two-level key picker (v1.0.5): a small category <select> ("Basic" / "Media
+// Control") next to a value <select> populated from that category's list —
+// #{idPrefix}-cat and #{idPrefix}-val. Choosing a different category
+// repopulates the value select from scratch (defaulting to that category's
+// first entry, since the previous value generally won't exist in the new
+// category's list).
+function makeKeyPicker(idPrefix, currentValue) {
+  const wrap = document.createElement('span');
+  wrap.className = 'key-picker';
+
+  const catSelect = document.createElement('select');
+  catSelect.className = 'key-cat';
+  catSelect.id = idPrefix + '-cat';
+  const catBasic = document.createElement('option');
+  catBasic.value = 'basic';
+  catBasic.dataset.i18n = 'catBasic';
+  catBasic.textContent = I18N[currentLang].catBasic;
+  const catMedia = document.createElement('option');
+  catMedia.value = 'media';
+  catMedia.dataset.i18n = 'catMedia';
+  catMedia.textContent = I18N[currentLang].catMedia;
+  catSelect.append(catBasic, catMedia);
+  catSelect.value = categoryOf(currentValue);
+
+  const valSelect = document.createElement('select');
+  valSelect.className = 'key-val';
+  valSelect.id = idPrefix + '-val';
+  fillKeyValueOptions(valSelect, catSelect.value, currentValue);
+
+  catSelect.addEventListener('change', () => {
+    fillKeyValueOptions(valSelect, catSelect.value, null);
+  });
+
+  wrap.append(catSelect, valSelect);
+  return wrap;
+}
+
+function fillSlot(slotId, idPrefix, value) {
   const slot = document.getElementById(slotId);
-  slot.replaceChildren(makeSelect(selectId, value));
+  slot.replaceChildren(makeKeyPicker(idPrefix, value));
+}
+
+function pickerValue(idPrefix) {
+  return document.getElementById(idPrefix + '-val').value;
 }
 
 async function init() {
@@ -468,7 +600,7 @@ async function init() {
     fetch('/api/key-options').then(r => r.json()),
     fetch('/api/config').then(r => r.json()),
   ]);
-  KEY_OPTIONS = options;
+  KEY_CATEGORIES = options;
   applyLanguage(config.language || 'en');
 
   const tbody = document.getElementById('analog-body');
@@ -480,12 +612,22 @@ async function init() {
     tdLabel.textContent = label;
     const tdDefault = document.createElement('td');
     const tdLayer1 = document.createElement('td');
-    tdDefault.appendChild(makeSelect('analog-default-' + i, config.keys_default[i]));
-    tdLayer1.appendChild(makeSelect('analog-layer1-' + i, config.keys_layer1[i]));
-    tr.append(tdLabel, tdDefault, tdLayer1);
+    tdLayer1.dataset.layer = '1';
+    const tdLayer2 = document.createElement('td');
+    tdLayer2.dataset.layer = '2';
+    tdDefault.appendChild(makeKeyPicker('analog-default-' + i, config.keys_default[i]));
+    tdLayer1.appendChild(makeKeyPicker('analog-layer1-' + i, config.keys_layer1[i]));
+    tdLayer2.appendChild(makeKeyPicker('analog-layer2-' + i, config.keys_layer2[i]));
+    tr.append(tdLabel, tdDefault, tdLayer1, tdLayer2);
     rows.push(tr);
   }
   tbody.replaceChildren(...rows);
+
+  document.getElementById('hypershift-mode').value = config.hypershift_mode;
+  document.getElementById('hypershift-switch-style').value = config.hypershift_switch_style;
+  document.getElementById('hypershift-layer-count').value = String(config.hypershift_layer_count);
+  fillSlot('slot-hypershift-modifier-key', 'hypershift-modifier-key', config.hypershift_modifier_key);
+  updateHypershiftFieldVisibility();
 
   fillSlot('slot-dpad-left', 'dpad-left', config.dpad_left);
   fillSlot('slot-dpad-up', 'dpad-up', config.dpad_up);
@@ -645,8 +787,41 @@ function updateLightingFieldVisibility() {
   setVisible('lighting-speed-field', effect === 'reactive');
 }
 
-function selectValue(id) {
-  return document.getElementById(id).value;
+function updateHypershiftFieldVisibility() {
+  const mode = document.getElementById('hypershift-mode').value;
+  const style = document.getElementById('hypershift-switch-style').value;
+  const setVisible = (id, visible) => {
+    document.getElementById(id).style.display = visible ? '' : 'none';
+  };
+  setVisible('hypershift-switch-style-field', mode === 'layer_switch');
+  setVisible('hypershift-layer-count-field', mode === 'layer_switch' && style === 'toggle');
+  setVisible('hypershift-modifier-key-field', mode === 'modifier_key');
+  updateLayerColumnAvailability();
+}
+
+// How many of the Analog Keys table's layer columns (Default always counts
+// as 1) are actually reachable given the current Hyper Shift settings:
+// modifier_key mode never switches layers at all (1, Default only);
+// momentary is always exactly 2 (Default/Layer1); toggle reaches
+// layer_count (2 or 3). Columns beyond that count are shown hatched
+// (.layer-col-unreachable) — still editable (config.toml keeps whatever is
+// there either way), just visually marked as not currently in play.
+function reachableLayerCount() {
+  const mode = document.getElementById('hypershift-mode').value;
+  if (mode === 'modifier_key') return 1;
+  const style = document.getElementById('hypershift-switch-style').value;
+  if (style === 'toggle') return Number(document.getElementById('hypershift-layer-count').value);
+  return 2; // momentary
+}
+
+function updateLayerColumnAvailability() {
+  const reachable = reachableLayerCount();
+  for (const layer of [1, 2]) {
+    const unreachable = layer >= reachable;
+    document.querySelectorAll('[data-layer="' + layer + '"]').forEach(el => {
+      el.classList.toggle('layer-col-unreachable', unreachable);
+    });
+  }
 }
 
 function perKeyValues(inputIdPrefix) {
@@ -667,21 +842,28 @@ async function save() {
 
   const keysDefault = [];
   const keysLayer1 = [];
+  const keysLayer2 = [];
   for (let i = 0; i < 20; i++) {
-    keysDefault.push(selectValue('analog-default-' + i));
-    keysLayer1.push(selectValue('analog-layer1-' + i));
+    keysDefault.push(pickerValue('analog-default-' + i));
+    keysLayer1.push(pickerValue('analog-layer1-' + i));
+    keysLayer2.push(pickerValue('analog-layer2-' + i));
   }
 
   const payload = {
     keys_default: keysDefault,
     keys_layer1: keysLayer1,
-    dpad_left: selectValue('dpad-left'),
-    dpad_up: selectValue('dpad-up'),
-    dpad_right: selectValue('dpad-right'),
-    dpad_down: selectValue('dpad-down'),
-    wheel_up: selectValue('wheel-up'),
-    wheel_down: selectValue('wheel-down'),
-    middle_click: selectValue('middle-click'),
+    keys_layer2: keysLayer2,
+    hypershift_mode: document.getElementById('hypershift-mode').value,
+    hypershift_switch_style: document.getElementById('hypershift-switch-style').value,
+    hypershift_layer_count: Number(document.getElementById('hypershift-layer-count').value),
+    hypershift_modifier_key: pickerValue('hypershift-modifier-key'),
+    dpad_left: pickerValue('dpad-left'),
+    dpad_up: pickerValue('dpad-up'),
+    dpad_right: pickerValue('dpad-right'),
+    dpad_down: pickerValue('dpad-down'),
+    wheel_up: pickerValue('wheel-up'),
+    wheel_down: pickerValue('wheel-down'),
+    middle_click: pickerValue('middle-click'),
     t_on: Number(document.getElementById('t-on').value),
     t_off: Number(document.getElementById('t-off').value),
     per_key_t_on: perKeyValues('perkey-ton-'),
@@ -720,6 +902,9 @@ async function save() {
 
 document.getElementById('save-btn').addEventListener('click', save);
 document.getElementById('lighting-effect').addEventListener('change', updateLightingFieldVisibility);
+document.getElementById('hypershift-mode').addEventListener('change', updateHypershiftFieldVisibility);
+document.getElementById('hypershift-switch-style').addEventListener('change', updateHypershiftFieldVisibility);
+document.getElementById('hypershift-layer-count').addEventListener('change', updateLayerColumnAvailability);
 document.getElementById('calib-toggle-btn').addEventListener('click', toggleCalibration);
 document.getElementById('language-select').addEventListener('change', (e) => setLanguage(e.target.value));
 window.addEventListener('beforeunload', () => {

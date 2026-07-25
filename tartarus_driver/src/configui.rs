@@ -9,7 +9,7 @@
 // normal `tartarus_driver` run for the new mapping to take effect.
 
 use crate::config::{ConfigPayload, DriverConfig};
-use crate::vkname::all_key_names;
+use crate::vkname::key_names_grouped;
 use crate::{eprintln, println, NUM_KEYS};
 use serde::{Deserialize, Serialize};
 use std::io::Read as _;
@@ -20,6 +20,16 @@ use tiny_http::{Header, Method, Response, Server};
 
 const PORT: u16 = 7878;
 const ASSET_HTML: &str = include_str!("../assets/configui.html");
+
+// Body of GET /api/key-options — the two categories configui.html's key
+// picker offers (v1.0.5). Split at the source (vkname::key_names_grouped())
+// rather than the page inferring category from name shape, so the page's
+// vocabulary can never drift from what the driver actually accepts.
+#[derive(Serialize)]
+struct KeyOptions {
+    basic: Vec<String>,
+    media: Vec<String>,
+}
 
 // The real payload is at most a few hundred bytes (30ish short key names as
 // JSON); 64 KiB is generous headroom while still bounding memory use no
@@ -287,7 +297,9 @@ fn handle_request(request: tiny_http::Request) {
                 .with_header(header("Content-Type", "text/html; charset=utf-8")),
         ),
         (Method::Get, "/api/key-options") => {
-            let json = serde_json::to_string(&all_key_names()).unwrap_or_else(|_| "[]".to_string());
+            let (basic, media) = key_names_grouped();
+            let json = serde_json::to_string(&KeyOptions { basic, media })
+                .unwrap_or_else(|_| "{\"basic\":[],\"media\":[]}".to_string());
             request.respond(json_response(json, 200))
         }
         (Method::Post, "/api/calibration/start") => {

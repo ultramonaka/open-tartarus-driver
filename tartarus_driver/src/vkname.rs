@@ -9,8 +9,9 @@
 
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     VIRTUAL_KEY, VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_HOME, VK_INSERT,
-    VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT, VK_NEXT, VK_PRIOR, VK_RCONTROL, VK_RETURN,
-    VK_RIGHT, VK_RMENU, VK_RSHIFT, VK_SPACE, VK_TAB, VK_UP,
+    VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE,
+    VK_MEDIA_PREV_TRACK, VK_MEDIA_STOP, VK_NEXT, VK_PRIOR, VK_RCONTROL, VK_RETURN, VK_RIGHT,
+    VK_RMENU, VK_RSHIFT, VK_SPACE, VK_TAB, VK_UP, VK_VOLUME_DOWN, VK_VOLUME_MUTE, VK_VOLUME_UP,
 };
 
 // Named keys beyond plain digits/letters/F-keys. (name, VIRTUAL_KEY) pairs so
@@ -39,6 +40,20 @@ const KEY_TABLE: &[(&str, VIRTUAL_KEY)] = &[
     ("DELETE", VK_DELETE),
 ];
 
+// v1.0.5: media/volume keys, kept in a separate table (not merged into
+// KEY_TABLE) so configui's key picker can offer them as their own "Media
+// Control" category (see key_names_grouped below) instead of mixed into the
+// much longer basic list.
+const MEDIA_KEY_TABLE: &[(&str, VIRTUAL_KEY)] = &[
+    ("MEDIA_PLAY_PAUSE", VK_MEDIA_PLAY_PAUSE),
+    ("MEDIA_STOP", VK_MEDIA_STOP),
+    ("MEDIA_NEXT", VK_MEDIA_NEXT_TRACK),
+    ("MEDIA_PREV", VK_MEDIA_PREV_TRACK),
+    ("VOLUME_MUTE", VK_VOLUME_MUTE),
+    ("VOLUME_DOWN", VK_VOLUME_DOWN),
+    ("VOLUME_UP", VK_VOLUME_UP),
+];
+
 const NUM_F_KEYS: u16 = 24;
 
 /// Parses a human-readable key name (case-insensitive) into a VIRTUAL_KEY.
@@ -63,6 +78,7 @@ pub fn vk_from_name(name: &str) -> Option<VIRTUAL_KEY> {
 
     KEY_TABLE
         .iter()
+        .chain(MEDIA_KEY_TABLE)
         .find(|(n, _)| *n == upper)
         .map(|(_, vk)| *vk)
 }
@@ -83,6 +99,7 @@ pub fn vk_to_name(vk: VIRTUAL_KEY) -> String {
     }
     KEY_TABLE
         .iter()
+        .chain(MEDIA_KEY_TABLE)
         .find(|(_, k)| k.0 == code)
         .map(|(n, _)| n.to_string())
         .unwrap_or_else(|| format!("0x{code:02X}"))
@@ -97,6 +114,13 @@ pub fn all_key_names() -> Vec<String> {
     names.extend((1..=NUM_F_KEYS).map(|n| format!("F{n}")));
     names.extend(KEY_TABLE.iter().map(|(n, _)| n.to_string()));
     names
+}
+
+/// (basic names, media names) — the same vocabulary as all_key_names(), just
+/// split into the two categories configui.html's key picker offers. Used by
+/// configui.rs's GET /api/key-options.
+pub fn key_names_grouped() -> (Vec<String>, Vec<String>) {
+    (all_key_names(), MEDIA_KEY_TABLE.iter().map(|(n, _)| n.to_string()).collect())
 }
 
 #[cfg(test)]
@@ -131,6 +155,25 @@ mod tests {
         for (name, _) in KEY_TABLE {
             let vk = vk_from_name(name).unwrap();
             assert_eq!(vk_to_name(vk), *name);
+        }
+    }
+
+    #[test]
+    fn media_keys_round_trip() {
+        for (name, _) in MEDIA_KEY_TABLE {
+            let vk = vk_from_name(name).unwrap();
+            assert_eq!(vk_to_name(vk), *name);
+        }
+    }
+
+    #[test]
+    fn key_names_grouped_matches_all_key_names_plus_media() {
+        let (basic, media) = key_names_grouped();
+        assert_eq!(basic, all_key_names());
+        assert_eq!(media.len(), MEDIA_KEY_TABLE.len());
+        for (name, _) in MEDIA_KEY_TABLE {
+            assert!(media.contains(&name.to_string()));
+            assert!(!basic.contains(&name.to_string()));
         }
     }
 

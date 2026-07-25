@@ -20,10 +20,10 @@
 
 use crate::lighting::{self, Color, Effect, LayerIndicatorConfig, LightingConfig, ProfileLedColor, WaveDirection};
 use crate::vkname::{vk_from_name, vk_to_name};
-use crate::{eprintln, println, NUM_KEYS};
+use crate::{eprintln, println, MAX_LAYERS, NUM_KEYS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY;
+use windows::Win32::UI::Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_LMENU};
 
 // config.toml's path is resolved at runtime relative to the running binary
 // — see main.rs's `app_root()`/`config_path()` for why this isn't a
@@ -35,10 +35,79 @@ use windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY;
 // so a machine with no config.toml behaves identically to before.
 const DEFAULT_ANALOG: [VIRTUAL_KEY; NUM_KEYS] = crate::TEST_KEYMAP;
 const DEFAULT_LAYER1: [VIRTUAL_KEY; NUM_KEYS] = crate::LAYER1_TEST_KEYMAP;
+const DEFAULT_LAYER2: [VIRTUAL_KEY; NUM_KEYS] = crate::LAYER2_TEST_KEYMAP;
 
+// index 0 = Default, 1 = Layer1, 2 = Layer2 (main.rs::MAX_LAYERS). [keys.layer2]
+// is always parsed/stored regardless of [hypershift] mode/switch_style/
+// layer_count — only reachable at runtime when switch_style="toggle" and
+// layer_count=3 (see hypershift.rs), but harmless to keep configured
+// otherwise, same fail-open philosophy as everything else in this file.
 pub struct AnalogKeymap {
-    pub default: [VIRTUAL_KEY; NUM_KEYS],
-    pub layer1: [VIRTUAL_KEY; NUM_KEYS],
+    pub layers: [[VIRTUAL_KEY; NUM_KEYS]; MAX_LAYERS],
+}
+
+// v1.0.5: what the physical "Hyper Response" thumb button does. LayerSwitch
+// is the only behavior this project had before v1.0.5 (with SwitchStyle
+// always effectively Momentary) — kept as the default so an existing
+// config.toml with no [hypershift] section sees zero behavior change.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum HypershiftMode {
+    LayerSwitch,
+    ModifierKey,
+}
+
+impl HypershiftMode {
+    fn as_str(&self) -> &'static str {
+        match self {
+            HypershiftMode::LayerSwitch => "layer_switch",
+            HypershiftMode::ModifierKey => "modifier_key",
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "layer_switch" => Some(HypershiftMode::LayerSwitch),
+            "modifier_key" => Some(HypershiftMode::ModifierKey),
+            _ => None,
+        }
+    }
+}
+
+// Only meaningful when mode == LayerSwitch. Momentary always behaves as
+// exactly 2 layers (held -> Layer1, released -> Default) regardless of
+// layer_count; Toggle cycles through layer_count layers, advancing only on
+// button press (see hypershift::on_trigger_edge).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SwitchStyle {
+    Momentary,
+    Toggle,
+}
+
+impl SwitchStyle {
+    fn as_str(&self) -> &'static str {
+        match self {
+            SwitchStyle::Momentary => "momentary",
+            SwitchStyle::Toggle => "toggle",
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "momentary" => Some(SwitchStyle::Momentary),
+            "toggle" => Some(SwitchStyle::Toggle),
+            _ => None,
+        }
+    }
+}
+
+pub struct HypershiftConfig {
+    pub mode: HypershiftMode,
+    pub switch_style: SwitchStyle,
+    // Only meaningful for (LayerSwitch, Toggle); always validated to 2 or 3.
+    pub layer_count: u8,
+    // Only meaningful for ModifierKey mode: the key sent on press/release in
+    // place of the button's own (suppressed) physical Alt keycode.
+    pub modifier_key: VIRTUAL_KEY,
 }
 
 pub struct DpadKeymap {
@@ -75,6 +144,7 @@ impl Actuation {
 
 pub struct DriverConfig {
     pub analog: AnalogKeymap,
+    pub hypershift: HypershiftConfig,
     pub dpad: DpadKeymap,
     pub actuation: Actuation,
     // None (the default, when config.toml has no [lighting] section) means
@@ -108,8 +178,13 @@ impl DriverConfig {
     pub fn defaults() -> Self {
         DriverConfig {
             analog: AnalogKeymap {
-                default: DEFAULT_ANALOG,
-                layer1: DEFAULT_LAYER1,
+                layers: [DEFAULT_ANALOG, DEFAULT_LAYER1, DEFAULT_LAYER2],
+            },
+            hypershift: HypershiftConfig {
+                mode: HypershiftMode::LayerSwitch,
+                switch_style: SwitchStyle::Momentary,
+                layer_count: 2,
+                modifier_key: VK_LMENU,
             },
             dpad: DpadKeymap {
                 left: crate::dpad::DPAD_ARROW_TEST_KEYMAP_LEFT,
@@ -136,6 +211,15 @@ impl DriverConfig {
 struct RawKeys {
     default: Option<HashMap<String, String>>,
     layer1: Option<HashMap<String, String>>,
+    layer2: Option<HashMap<String, String>>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawHypershift {
+    mode: Option<String>,
+    switch_style: Option<String>,
+    layer_count: Option<u8>,
+    modifier_key: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -193,6 +277,7 @@ struct RawConfigui {
 #[derive(Deserialize, Default)]
 struct RawConfig {
     keys: Option<RawKeys>,
+    hypershift: Option<RawHypershift>,
     dpad: Option<RawDpad>,
     wheel: Option<RawWheel>,
     middle_click: Option<RawMiddleClick>,
@@ -259,6 +344,53 @@ fn apply_single(target: &mut VIRTUAL_KEY, provided: &Option<String>, field: &str
             "WARNING: config.toml {field} = \"{name}\" is not a recognized key name; keeping \
              the built-in default."
         ),
+    }
+}
+
+// Applies [hypershift], if present. Each field is validated and falls back
+// independently to its own built-in default with a warning on a bad value —
+// unlike apply_actuation/apply_lighting, these four fields don't interact
+// with each other (mode/switch_style/layer_count/modifier_key are each
+// independently meaningful), so there's no cross-field pair to protect the
+// way t_on/t_off or a lighting effect+params are.
+fn apply_hypershift(target: &mut HypershiftConfig, provided: &Option<RawHypershift>) {
+    let Some(raw) = provided else { return };
+    if let Some(mode) = &raw.mode {
+        match HypershiftMode::from_str(mode) {
+            Some(m) => target.mode = m,
+            None => eprintln!(
+                "WARNING: config.toml [hypershift] mode = \"{mode}\" is not \"layer_switch\" or \
+                 \"modifier_key\"; keeping the default (\"layer_switch\")."
+            ),
+        }
+    }
+    if let Some(style) = &raw.switch_style {
+        match SwitchStyle::from_str(style) {
+            Some(s) => target.switch_style = s,
+            None => eprintln!(
+                "WARNING: config.toml [hypershift] switch_style = \"{style}\" is not \"momentary\" \
+                 or \"toggle\"; keeping the default (\"momentary\")."
+            ),
+        }
+    }
+    if let Some(n) = raw.layer_count {
+        if n == 2 || n == 3 {
+            target.layer_count = n;
+        } else {
+            eprintln!(
+                "WARNING: config.toml [hypershift] layer_count = {n} must be 2 or 3; keeping the \
+                 default (2)."
+            );
+        }
+    }
+    if let Some(name) = &raw.modifier_key {
+        match vk_from_name(name) {
+            Some(vk) => target.modifier_key = vk,
+            None => eprintln!(
+                "WARNING: config.toml [hypershift] modifier_key = \"{name}\" is not a recognized \
+                 key name; keeping the default (\"LALT\")."
+            ),
+        }
     }
 }
 
@@ -404,12 +536,16 @@ pub fn load() -> DriverConfig {
 
     if let Some(keys) = &raw.keys {
         if let Some(m) = &keys.default {
-            apply_analog_map(&mut cfg.analog.default, m, "keys.default");
+            apply_analog_map(&mut cfg.analog.layers[0], m, "keys.default");
         }
         if let Some(m) = &keys.layer1 {
-            apply_analog_map(&mut cfg.analog.layer1, m, "keys.layer1");
+            apply_analog_map(&mut cfg.analog.layers[1], m, "keys.layer1");
+        }
+        if let Some(m) = &keys.layer2 {
+            apply_analog_map(&mut cfg.analog.layers[2], m, "keys.layer2");
         }
     }
+    apply_hypershift(&mut cfg.hypershift, &raw.hypershift);
     if let Some(dpad) = &raw.dpad {
         apply_single(&mut cfg.dpad.left, &dpad.left, "dpad.left");
         apply_single(&mut cfg.dpad.up, &dpad.up, "dpad.up");
@@ -440,6 +576,11 @@ pub fn load() -> DriverConfig {
 pub struct ConfigPayload {
     pub keys_default: Vec<String>, // exactly NUM_KEYS entries, key01..key20 in order
     pub keys_layer1: Vec<String>,  // exactly NUM_KEYS entries, key01..key20 in order
+    pub keys_layer2: Vec<String>,  // exactly NUM_KEYS entries, key01..key20 in order
+    pub hypershift_mode: String,          // "layer_switch" | "modifier_key"
+    pub hypershift_switch_style: String,  // "momentary" | "toggle"
+    pub hypershift_layer_count: u8,       // 2 | 3
+    pub hypershift_modifier_key: String,
     pub dpad_left: String,
     pub dpad_up: String,
     pub dpad_right: String,
@@ -495,8 +636,13 @@ impl ConfigPayload {
         let (lighting_effect, lighting_color, lighting_brightness, lighting_wave_direction, lighting_reactive_speed) =
             lighting_to_payload_fields(&cfg.lighting);
         ConfigPayload {
-            keys_default: cfg.analog.default.iter().map(|vk| vk_to_name(*vk)).collect(),
-            keys_layer1: cfg.analog.layer1.iter().map(|vk| vk_to_name(*vk)).collect(),
+            keys_default: cfg.analog.layers[0].iter().map(|vk| vk_to_name(*vk)).collect(),
+            keys_layer1: cfg.analog.layers[1].iter().map(|vk| vk_to_name(*vk)).collect(),
+            keys_layer2: cfg.analog.layers[2].iter().map(|vk| vk_to_name(*vk)).collect(),
+            hypershift_mode: cfg.hypershift.mode.as_str().to_string(),
+            hypershift_switch_style: cfg.hypershift.switch_style.as_str().to_string(),
+            hypershift_layer_count: cfg.hypershift.layer_count,
+            hypershift_modifier_key: vk_to_name(cfg.hypershift.modifier_key),
             dpad_left: vk_to_name(cfg.dpad.left),
             dpad_up: vk_to_name(cfg.dpad.up),
             dpad_right: vk_to_name(cfg.dpad.right),
@@ -535,6 +681,9 @@ impl ConfigPayload {
         if self.keys_layer1.len() != NUM_KEYS {
             return Err(format!("keys_layer1 には{NUM_KEYS}件必要です"));
         }
+        if self.keys_layer2.len() != NUM_KEYS {
+            return Err(format!("keys_layer2 には{NUM_KEYS}件必要です"));
+        }
 
         let check = |label: String, name: &str| -> Result<(), String> {
             if vk_from_name(name).is_some() {
@@ -549,6 +698,28 @@ impl ConfigPayload {
         for (i, name) in self.keys_layer1.iter().enumerate() {
             check(format!("keys.layer1.key{:02}", i + 1), name)?;
         }
+        for (i, name) in self.keys_layer2.iter().enumerate() {
+            check(format!("keys.layer2.key{:02}", i + 1), name)?;
+        }
+        if self.hypershift_mode != "layer_switch" && self.hypershift_mode != "modifier_key" {
+            return Err(format!(
+                "hypershift.mode: \"{}\" は \"layer_switch\" または \"modifier_key\" である必要があります",
+                self.hypershift_mode
+            ));
+        }
+        if self.hypershift_switch_style != "momentary" && self.hypershift_switch_style != "toggle" {
+            return Err(format!(
+                "hypershift.switch_style: \"{}\" は \"momentary\" または \"toggle\" である必要があります",
+                self.hypershift_switch_style
+            ));
+        }
+        if self.hypershift_layer_count != 2 && self.hypershift_layer_count != 3 {
+            return Err(format!(
+                "hypershift.layer_count: {} は2または3である必要があります",
+                self.hypershift_layer_count
+            ));
+        }
+        check("hypershift.modifier_key".into(), &self.hypershift_modifier_key)?;
         for (label, name) in [
             ("dpad.left", &self.dpad_left),
             ("dpad.up", &self.dpad_up),
@@ -621,6 +792,16 @@ impl ConfigPayload {
         for (i, name) in self.keys_layer1.iter().enumerate() {
             writeln!(s, "key{:02} = \"{name}\"", i + 1).unwrap();
         }
+        s.push_str("\n[keys.layer2]\n");
+        for (i, name) in self.keys_layer2.iter().enumerate() {
+            writeln!(s, "key{:02} = \"{name}\"", i + 1).unwrap();
+        }
+        write!(
+            s,
+            "\n[hypershift]\nmode = \"{}\"\nswitch_style = \"{}\"\nlayer_count = {}\nmodifier_key = \"{}\"\n",
+            self.hypershift_mode, self.hypershift_switch_style, self.hypershift_layer_count, self.hypershift_modifier_key
+        )
+        .unwrap();
         write!(
             s,
             "\n[dpad]\nleft = \"{}\"\nup = \"{}\"\nright = \"{}\"\ndown = \"{}\"\n",
@@ -666,9 +847,101 @@ mod tests {
     #[test]
     fn defaults_match_pre_phase4_placeholder_keymaps() {
         let cfg = DriverConfig::defaults();
-        assert_eq!(cfg.analog.default, crate::TEST_KEYMAP);
-        assert_eq!(cfg.analog.layer1, crate::LAYER1_TEST_KEYMAP);
+        assert_eq!(cfg.analog.layers[0], crate::TEST_KEYMAP);
+        assert_eq!(cfg.analog.layers[1], crate::LAYER1_TEST_KEYMAP);
+        assert_eq!(cfg.analog.layers[2], crate::LAYER2_TEST_KEYMAP);
         assert_eq!(cfg.dpad.left, crate::dpad::DPAD_ARROW_TEST_KEYMAP_LEFT);
+    }
+
+    #[test]
+    fn hypershift_defaults_and_payload_round_trip() {
+        let cfg = DriverConfig::defaults();
+        assert!(matches!(cfg.hypershift.mode, HypershiftMode::LayerSwitch));
+        assert!(matches!(cfg.hypershift.switch_style, SwitchStyle::Momentary));
+        assert_eq!(cfg.hypershift.layer_count, 2);
+        assert_eq!(cfg.hypershift.modifier_key, VK_LMENU);
+        let payload = ConfigPayload::from_driver_config(&cfg);
+        assert_eq!(payload.hypershift_mode, "layer_switch");
+        assert_eq!(payload.hypershift_switch_style, "momentary");
+        assert_eq!(payload.hypershift_layer_count, 2);
+        assert_eq!(payload.hypershift_modifier_key, "LALT");
+        assert!(payload.validate().is_ok());
+    }
+
+    #[test]
+    fn apply_hypershift_rejects_bad_values_and_applies_good_ones() {
+        let mut hs = HypershiftConfig {
+            mode: HypershiftMode::LayerSwitch,
+            switch_style: SwitchStyle::Momentary,
+            layer_count: 2,
+            modifier_key: VK_LMENU,
+        };
+        let bad = Some(RawHypershift {
+            mode: Some("not_a_mode".to_string()),
+            switch_style: Some("not_a_style".to_string()),
+            layer_count: Some(5),
+            modifier_key: Some("NOT_A_KEY".to_string()),
+        });
+        apply_hypershift(&mut hs, &bad);
+        assert!(matches!(hs.mode, HypershiftMode::LayerSwitch));
+        assert!(matches!(hs.switch_style, SwitchStyle::Momentary));
+        assert_eq!(hs.layer_count, 2);
+        assert_eq!(hs.modifier_key, VK_LMENU);
+
+        let good = Some(RawHypershift {
+            mode: Some("modifier_key".to_string()),
+            switch_style: Some("toggle".to_string()),
+            layer_count: Some(3),
+            modifier_key: Some("LCTRL".to_string()),
+        });
+        apply_hypershift(&mut hs, &good);
+        assert!(matches!(hs.mode, HypershiftMode::ModifierKey));
+        assert!(matches!(hs.switch_style, SwitchStyle::Toggle));
+        assert_eq!(hs.layer_count, 3);
+        assert_eq!(hs.modifier_key, vk_from_name("LCTRL").unwrap());
+    }
+
+    #[test]
+    fn payload_rejects_bad_hypershift_fields() {
+        let cfg = DriverConfig::defaults();
+        let mut payload = ConfigPayload::from_driver_config(&cfg);
+
+        payload.hypershift_mode = "bogus".to_string();
+        assert!(payload.validate().is_err());
+        payload.hypershift_mode = "modifier_key".to_string();
+        assert!(payload.validate().is_ok());
+
+        payload.hypershift_switch_style = "bogus".to_string();
+        assert!(payload.validate().is_err());
+        payload.hypershift_switch_style = "toggle".to_string();
+        assert!(payload.validate().is_ok());
+
+        payload.hypershift_layer_count = 4;
+        assert!(payload.validate().is_err());
+        payload.hypershift_layer_count = 3;
+        assert!(payload.validate().is_ok());
+
+        payload.hypershift_modifier_key = "NOT_A_KEY".to_string();
+        assert!(payload.validate().is_err());
+        payload.hypershift_modifier_key = "RALT".to_string();
+        assert!(payload.validate().is_ok());
+    }
+
+    #[test]
+    fn keys_layer2_round_trips_and_is_validated() {
+        let cfg = DriverConfig::defaults();
+        assert_eq!(cfg.analog.layers[2], crate::LAYER2_TEST_KEYMAP);
+        let mut payload = ConfigPayload::from_driver_config(&cfg);
+        assert_eq!(payload.keys_layer2.len(), NUM_KEYS);
+
+        payload.keys_layer2[0] = "NOT_A_KEY".to_string();
+        let err = payload.validate().unwrap_err();
+        assert!(err.contains("keys.layer2.key01"));
+
+        payload.keys_layer2 = payload.keys_layer2.iter().map(|_| "Z".to_string()).collect();
+        let toml_text = payload.to_toml_string();
+        assert!(toml_text.contains("[keys.layer2]"));
+        assert!(toml_text.contains("key01 = \"Z\""));
     }
 
     #[test]

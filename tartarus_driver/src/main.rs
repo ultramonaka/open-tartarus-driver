@@ -178,6 +178,13 @@ const PID: u16 = 0x0244;
 const ANALOG_REPORT_ID: u8 = 0x06;
 const NUM_KEYS: usize = 20;
 
+// Phase v1.0.5 (Hyper Shift redesign): the analog keymap now holds up to 3
+// layers (index 0 = Default, 1 = Layer1, 2 = Layer2) instead of two fixed
+// fields. Toggle-style Hypershift can cycle through 2 or 3 of them
+// (config.toml's [hypershift] layer_count); momentary style always uses
+// exactly layers 0/1 regardless of layer_count (see hypershift.rs).
+pub const MAX_LAYERS: usize = 3;
+
 // Hysteresis thresholds per Purpose.md §6.1 (recommended values). Phase 4:
 // these are now specifically the BUILT-IN DEFAULT used by config.rs
 // whenever config.toml has no [actuation] section (or an invalid t_on/t_off
@@ -242,6 +249,35 @@ const LAYER1_TEST_KEYMAP: [VIRTUAL_KEY; NUM_KEYS] = [
     VIRTUAL_KEY(0x83), // key20 -> F20
 ];
 
+// TEST/PLACEHOLDER Layer2 (Hypershift toggle, 3rd layer) keymap — same
+// throwaway style as TEST_KEYMAP/LAYER1_TEST_KEYMAP, only reachable when
+// config.toml sets [hypershift] switch_style="toggle", layer_count=3. Reuses
+// vkname.rs's 20 named specials (LEFT..INSERT) so it's trivially
+// distinguishable from both other layers during testing without needing any
+// new vkname vocabulary.
+const LAYER2_TEST_KEYMAP: [VIRTUAL_KEY; NUM_KEYS] = [
+    VIRTUAL_KEY(0x25), // key01 -> LEFT
+    VIRTUAL_KEY(0x26), // key02 -> UP
+    VIRTUAL_KEY(0x27), // key03 -> RIGHT
+    VIRTUAL_KEY(0x28), // key04 -> DOWN
+    VIRTUAL_KEY(0x20), // key05 -> SPACE
+    VIRTUAL_KEY(0x0D), // key06 -> ENTER
+    VIRTUAL_KEY(0x09), // key07 -> TAB
+    VIRTUAL_KEY(0x1B), // key08 -> ESCAPE
+    VIRTUAL_KEY(0x08), // key09 -> BACKSPACE
+    VIRTUAL_KEY(0xA0), // key10 -> LSHIFT
+    VIRTUAL_KEY(0xA1), // key11 -> RSHIFT
+    VIRTUAL_KEY(0xA2), // key12 -> LCTRL
+    VIRTUAL_KEY(0xA3), // key13 -> RCTRL
+    VIRTUAL_KEY(0xA4), // key14 -> LALT
+    VIRTUAL_KEY(0xA5), // key15 -> RALT
+    VIRTUAL_KEY(0x24), // key16 -> HOME
+    VIRTUAL_KEY(0x23), // key17 -> END
+    VIRTUAL_KEY(0x21), // key18 -> PAGEUP
+    VIRTUAL_KEY(0x22), // key19 -> PAGEDOWN
+    VIRTUAL_KEY(0x2D), // key20 -> INSERT
+];
+
 // Set by console_ctrl_handler (Ctrl+C, Ctrl+Break, console window closed,
 // logoff, or shutdown) so the main analog-read loop can notice and exit its
 // own way — running the existing "force-release any key still logically
@@ -280,14 +316,22 @@ fn send_key(vk: VIRTUAL_KEY, key_up: bool) {
     }
 }
 
-// Purpose.md §6② step 3: on the Hypershift-release edge, force-send KeyUp
-// for every key still logically down so nothing stays stuck held after the
-// layer switches back to Default. (If the physical key is still past T_ON
-// afterwards, the next report re-presses it under the Default layer, which
-// is the intended meaning of the key now.) Shared by the real driver loop
-// and `emulate` mode (see emulate.rs) so both exercise this edge exactly the
-// same way.
-pub(crate) fn force_keyup_on_hypershift_release(
+// Purpose.md §6② step 3: on the transition BACK TO Default (from any other
+// layer — not on every transition, and specifically not on the Default ->
+// Layer1/Layer2 press edge), force-send KeyUp for every key still logically
+// down so nothing stays stuck sending a non-Default layer's key after
+// returning to Default. (If the physical key is still past T_ON afterwards,
+// the next report re-presses it fresh under Default.) A key already held
+// when Hyper Shift engages (leaving Default) deliberately keeps sending
+// whatever it was pressed with for the rest of that hold — this is the
+// original, hardware-verified momentary design, and generalizing it to fire
+// on every transition (tried briefly during v1.0.5 development) turned out
+// to be a real regression: it force-released+re-pressed an already-held key
+// the instant Hyper Shift engaged, sending both the Default and the new
+// layer's key back-to-back instead of a clean switch. Shared by the real
+// driver loop and `emulate` mode (see emulate.rs) so both exercise this edge
+// exactly the same way.
+pub(crate) fn force_keyup_on_layer_change(
     pressed_vk: &mut [Option<VIRTUAL_KEY>; NUM_KEYS],
     start: Instant,
 ) {
@@ -295,7 +339,7 @@ pub(crate) fn force_keyup_on_hypershift_release(
         if let Some(vk) = slot.take() {
             send_key(vk, true);
             println!(
-                "[t={:>8.3}s] key{:02} UP   (forced: Hypershift released)",
+                "[t={:>8.3}s] key{:02} UP   (forced: Hyper Shift layer changed)",
                 start.elapsed().as_secs_f64(),
                 i + 1
             );
@@ -303,14 +347,24 @@ pub(crate) fn force_keyup_on_hypershift_release(
     }
 }
 
+fn layer_name(layer: usize) -> String {
+    if layer == 0 {
+        "Default".to_string()
+    } else {
+        format!("Layer{layer}")
+    }
+}
+
 // Runs the hysteresis + keymap + SendInput decision for one already-parsed
 // analog report: `depths[i]` is the 0-255 depth for key(i+1) (report ID 6,
-// bytes[1..=NUM_KEYS]). Shared by the real driver loop (fed from an actual
-// HID read) and `emulate` mode (fed from a synthetic depth array typed at a
-// terminal — see emulate.rs), so both exercise identical logic bit-for-bit.
+// bytes[1..=NUM_KEYS]). `layer` is the active Hyper Shift layer index (0 =
+// Default, per hypershift::CURRENT_LAYER — always < MAX_LAYERS). Shared by
+// the real driver loop (fed from an actual HID read) and `emulate` mode (fed
+// from a synthetic depth array typed at a terminal — see emulate.rs), so
+// both exercise identical logic bit-for-bit.
 pub(crate) fn process_key_depths(
     depths: &[u8; NUM_KEYS],
-    hypershift: bool,
+    layer: usize,
     pressed_vk: &mut [Option<VIRTUAL_KEY>; NUM_KEYS],
     start: Instant,
 ) {
@@ -318,11 +372,7 @@ pub(crate) fn process_key_depths(
         let depth = depths[i];
         let (t_on, t_off) = cfg().actuation.for_key(i);
         if pressed_vk[i].is_none() && depth > t_on {
-            let vk = if hypershift {
-                cfg().analog.layer1[i]
-            } else {
-                cfg().analog.default[i]
-            };
+            let vk = cfg().analog.layers[layer][i];
             pressed_vk[i] = Some(vk);
             send_key(vk, false);
             println!(
@@ -330,7 +380,7 @@ pub(crate) fn process_key_depths(
                 start.elapsed().as_secs_f64(),
                 i + 1,
                 depth,
-                if hypershift { "Layer1" } else { "Default" }
+                layer_name(layer)
             );
         } else if depth < t_off
             && let Some(vk) = pressed_vk[i].take()
@@ -589,32 +639,42 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
     // or forced-at-shutdown) always releases under the keymap the key was
     // pressed with, even if the layer changed in between.
     let mut pressed_vk: [Option<VIRTUAL_KEY>; NUM_KEYS] = [None; NUM_KEYS];
-    let mut hypershift_prev = false;
+    let mut layer_prev: usize = 0;
     let start = Instant::now();
     let deadline = Duration::from_secs(duration_secs);
     let mut buf = [0u8; 64];
 
     while !SHUTDOWN_REQUESTED.load(Ordering::SeqCst) && (run_forever || start.elapsed() < deadline) {
-        let hypershift = hypershift::HYPERSHIFT_ACTIVE.load(Ordering::SeqCst);
+        let layer = hypershift::CURRENT_LAYER.load(Ordering::SeqCst) as usize;
 
-        // Layer indicator LED (if configured): reflect every Hypershift
-        // press/release edge, not just the release-only cleanup below.
-        if hypershift != hypershift_prev
+        // On any Hyper Shift layer change: reflect it on the indicator LED
+        // (if configured — on for any non-Default layer, off for Default;
+        // TASK-009: unverified on real hardware whether this LED actually
+        // lights, kept as a harmless opt-in regardless).
+        if layer != layer_prev
             && let Some(ctrl) = &ctrl
             && let Some(indicator) = &cfg().layer_indicator
         {
-            lighting::set_layer_indicator(ctrl, &indicator.color, hypershift);
+            lighting::set_layer_indicator(ctrl, &indicator.color, layer != 0);
         }
-
-        // Purpose.md §6② step 3: on the Hypershift-release edge, force-send
-        // KeyUp for every key still logically down so nothing stays stuck
-        // held after the layer switches back to Default. (If the physical key
-        // is still past T_ON afterwards, the next report re-presses it under
-        // the Default layer, which is the intended meaning of the key now.)
-        if hypershift_prev && !hypershift {
-            force_keyup_on_hypershift_release(&mut pressed_vk, start);
+        // Force-send KeyUp for every key still logically down, but ONLY on
+        // the transition back to Default (from any other layer) — NOT on
+        // every transition. This matches the original, hardware-verified
+        // momentary design exactly (Purpose.md §6② step 3): a key already
+        // held when Hyper Shift engages keeps sending whatever it was
+        // pressed with for the rest of that hold, and only gets forcibly
+        // reset when the layer returns to Default. v1.0.5 initially
+        // generalized this to fire on EVERY transition (including the
+        // Default->Layer1 press edge), which turned out to be a real
+        // regression: an analog key already held under Default would get an
+        // immediate KeyUp+KeyDown pair the instant Hyper Shift engaged,
+        // visibly sending BOTH the Default and Layer1 key in quick
+        // succession (e.g. "1" then "6") instead of a clean switch —
+        // reverted back to this narrower, originally-verified condition.
+        if layer_prev != 0 && layer == 0 {
+            force_keyup_on_layer_change(&mut pressed_vk, start);
         }
-        hypershift_prev = hypershift;
+        layer_prev = layer;
 
         for (_interface, device) in &devices {
             if let Ok(len) = device.read(&mut buf) {
@@ -622,7 +682,7 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
                     continue;
                 }
                 let depths: [u8; NUM_KEYS] = buf[1..1 + NUM_KEYS].try_into().unwrap();
-                process_key_depths(&depths, hypershift, &mut pressed_vk, start);
+                process_key_depths(&depths, layer, &mut pressed_vk, start);
             }
         }
         std::thread::sleep(Duration::from_micros(500));

@@ -9,17 +9,23 @@
 #
 # Every value is a key name from a closed vocabulary: single digits "0".."9",
 # single letters "A".."Z", "F1".."F24", the arrow keys "LEFT"/"UP"/"RIGHT"/
-# "DOWN", and these named keys: "SPACE", "ENTER", "TAB", "ESCAPE",
-# "BACKSPACE", "LSHIFT", "RSHIFT", "LCTRL", "RCTRL", "LALT", "RALT", "HOME",
-# "END", "PAGEUP", "PAGEDOWN", "INSERT", "DELETE". An unrecognized name (typo,
+# "DOWN", these named keys: "SPACE", "ENTER", "TAB", "ESCAPE", "BACKSPACE",
+# "LSHIFT", "RSHIFT", "LCTRL", "RCTRL", "LALT", "RALT", "HOME", "END",
+# "PAGEUP", "PAGEDOWN", "INSERT", "DELETE", and these media/volume keys (new
+# in v1.0.5): "MEDIA_PLAY_PAUSE", "MEDIA_STOP", "MEDIA_NEXT", "MEDIA_PREV",
+# "VOLUME_MUTE", "VOLUME_DOWN", "VOLUME_UP". An unrecognized name (typo,
 # wrong case handled automatically but an unknown word is not) falls back to
 # the built-in default for that one entry and prints a warning to
 # tasks/run.log — it never crashes the driver or breaks other entries.
 #
-# [keys.default] / [keys.layer1]: the 20 analog keys, numbered key01..key20
-# matching the number printed on each physical keycap. [keys.default] is the
-# normal layer; [keys.layer1] is what's active while the "Hyper Response"
-# thumb button (Hypershift) is held down.
+# [keys.default] / [keys.layer1] / [keys.layer2]: the 20 analog keys, numbered
+# key01..key20 matching the number printed on each physical keycap.
+# [keys.default] is the normal (Default) layer. [keys.layer1]/[keys.layer2]
+# are only reachable depending on [hypershift] below: with the default
+# mode/switch_style (layer_switch/momentary), only layer1 is ever used, while
+# the "Hyper Response" thumb button is held — layer2 is stored but inert.
+# Switching switch_style to "toggle" with layer_count = 3 makes the button
+# cycle Default -> Layer1 -> Layer2 -> Default on every press instead.
 
 [keys.default]
 key01 = "1"
@@ -64,6 +70,49 @@ key17 = "F17"
 key18 = "F18"
 key19 = "F19"
 key20 = "F20"
+
+# Only reachable in [hypershift] switch_style = "toggle", layer_count = 3
+# (see below); harmless to leave at its built-in default otherwise.
+[keys.layer2]
+key01 = "LEFT"
+key02 = "UP"
+key03 = "RIGHT"
+key04 = "DOWN"
+key05 = "SPACE"
+key06 = "ENTER"
+key07 = "TAB"
+key08 = "ESCAPE"
+key09 = "BACKSPACE"
+key10 = "LSHIFT"
+key11 = "RSHIFT"
+key12 = "LCTRL"
+key13 = "RCTRL"
+key14 = "LALT"
+key15 = "RALT"
+key16 = "HOME"
+key17 = "END"
+key18 = "PAGEUP"
+key19 = "PAGEDOWN"
+key20 = "INSERT"
+
+# What the physical "Hyper Response" thumb button does (new in v1.0.5).
+#   mode: "layer_switch" (default) - the button drives [keys.layer1]/
+#     [keys.layer2] above; "modifier_key" - layer switching is disabled
+#     entirely and the button just sends modifier_key on press/release, like
+#     any other key.
+#   switch_style: only used when mode = "layer_switch". "momentary" (default,
+#     original v1.0.0-v1.0.4 behavior) - held selects Layer1, released
+#     returns to Default (always exactly 2 layers, layer_count is ignored).
+#     "toggle" - every press advances one layer (Default -> Layer1 ->
+#     (Layer2 ->) Default ...); release does nothing.
+#   layer_count: only used when switch_style = "toggle". 2 or 3.
+#   modifier_key: only used when mode = "modifier_key". Any key name from the
+#     vocabulary above.
+[hypershift]
+mode = "layer_switch"
+switch_style = "momentary"
+layer_count = 2
+modifier_key = "LALT"
 
 # The 8-way D-pad's four directions.
 [dpad]

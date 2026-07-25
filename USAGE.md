@@ -80,7 +80,8 @@ Type commands and press Enter:
 | `5` | tap key 5: DOWN then UP |
 | `5 down` / `5 up` | hold / release key 5 |
 | `5 140` | set key 5's raw depth directly to 140 (0-255) — handy for testing an exact `t_on`/`t_off` threshold |
-| `hyper` | toggle Hypershift, as if the Hyper Response button were pressed/released |
+| `hyper` | tap the Hyper Response button: press then release |
+| `hyper down` / `hyper up` | hold / release the Hyper Response button |
 | `help` | show the command list again |
 | `quit` | exit (also releases any key still held) |
 
@@ -99,7 +100,7 @@ cd tartarus_driver
 cargo run --release -- configui
 ```
 
-Open the URL shown in the console (`http://127.0.0.1:7878/`) in your browser. You'll see dropdowns for the 20 analog keys (Default layer and Layer1 each), the D-pad, the wheel, and middle-click — pick the keys you want and click "Save".
+Open the URL shown in the console (`http://127.0.0.1:7878/`) in your browser. You'll see pickers for the 20 analog keys (Default/Layer1/Layer2 each), a "Hyper Shift" panel (mode/switch style/layer count/modifier key), the D-pad, the wheel, and middle-click — pick the keys you want and click "Save". Each key picker has a small category dropdown next to it ("Basic" or "Media Control") to narrow the list before picking the actual key.
 
 The page itself has a language switcher (top right, English/日本語). Switching it re-translates the page immediately and is saved right away (independent of the "Save" button below) — it's remembered the next time you open `configui`, in `config.toml`'s `[configui]` section. Defaults to English.
 
@@ -141,9 +142,23 @@ With `effect = "none"` (the default, same as omitting the section), the driver n
 
 **Hardware verification status (2026-07-21)**: `off`/`static`/`spectrum` visually confirmed. `breathing`/`wave`/`reactive` use the same command shape so likely work, but aren't individually confirmed yet. If it doesn't light up as expected, check for a `Lighting: ...` line in `tasks/run.log`, and whether `WARNING: failed to send lighting ...` appears. Per-key individual color control is not implemented.
 
-### 6. Hypershift layer
+### 6. Hyper Shift (the "Hyper Response" thumb button)
 
-Holding the "Hyper Response" thumb button (next to the D-pad, labeled "D" in Razer's manual) switches all 20 analog keys to the `[keys.layer1]` assignments in `config.toml`. Releasing it switches back to `[keys.default]`. While held, Alt itself is never sent to the OS (the button physically sends an Alt keycode, and this is deliberately blocked).
+**New in v1.0.5**: what the "Hyper Response" thumb button (next to the D-pad, labeled "D" in Razer's manual) does is now configurable via `config.toml`'s `[hypershift]` section (or `configui`'s "Hyper Shift" panel):
+
+| `mode` | Effect |
+|---|---|
+| `"layer_switch"` (default) | The button switches which of `[keys.default]`/`[keys.layer1]`/`[keys.layer2]` is active — see `switch_style` below for exactly how |
+| `"modifier_key"` | Layer switching is disabled entirely; the button just sends `modifier_key` (default `LALT`) on press/release, like any other key |
+
+When `mode = "layer_switch"`, `switch_style` controls the trigger behavior:
+
+| `switch_style` | Effect |
+|---|---|
+| `"momentary"` (default, original v1.0.0-v1.0.4 behavior) | Held selects Layer1, released returns to Default. Always exactly 2 layers — `layer_count` is ignored |
+| `"toggle"` | Every press advances one layer, wrapping around (`layer_count = 2`: Default ↔ Layer1; `layer_count = 3`: Default → Layer1 → Layer2 → Default → …). Release does nothing |
+
+While a non-Default layer is active, Alt itself is never sent to the OS (the button physically sends an Alt keycode, which the driver deliberately intercepts to detect the press/release — regardless of `mode`/`switch_style`).
 
 **Fixed 2026-07-21**: this Alt detection used to be implemented with a `WH_KEYBOARD_LL` hook that couldn't tell which keyboard an Alt press came from, so a real keyboard's Alt (Alt+Tab, Alt+F4, etc.) also stopped reaching the OS while the driver ran. It's now unified with the same Interception-based device-aware handling used for the D-pad — **only the Tartarus's own Alt (Hyper Response) is affected; a real keyboard's Alt+Tab etc. is untouched** (confirmed on real hardware).
 
@@ -239,7 +254,8 @@ cargo run --release -- tray
 | `5` | key5をタップ(DOWN→UP) |
 | `5 down` / `5 up` | key5を押しっぱなし/離す |
 | `5 140` | key5の生の深度を直接140(0-255)に設定 — `t_on`/`t_off`のしきい値ちょうどをテストしたいときに便利 |
-| `hyper` | Hyper Responseボタンを押した/離したときと同じようにHypershiftを切り替える |
+| `hyper` | Hyper Responseボタンをタップ(押して離す) |
+| `hyper down` / `hyper up` | Hyper Responseボタンを押しっぱなし/離す |
 | `help` | コマンド一覧を再表示 |
 | `quit` | 終了(押しっぱなしのキーがあれば解放してから終了) |
 
@@ -258,7 +274,7 @@ cd tartarus_driver
 cargo run --release -- configui
 ```
 
-コンソールに表示されるURL(`http://127.0.0.1:7878/`)をブラウザで開く。20個のアナログキー(通常レイヤー・Layer1それぞれ)、十字キー、ホイール、ホイールクリックのプルダウンが並んでいるので、割り当てたいキーを選んで「保存」を押す。
+コンソールに表示されるURL(`http://127.0.0.1:7878/`)をブラウザで開く。20個のアナログキー(通常レイヤー・Layer1・Layer2それぞれ)、「ハイパーシフト」パネル(モード・切替方式・レイヤー数・修飾キー)、十字キー、ホイール、ホイールクリックのピッカーが並んでいるので、割り当てたいキーを選んで「保存」を押す。各キーピッカーには「基本」「メディア操作」のカテゴリ選択が付いており、先にカテゴリを絞ってから実際のキーを選べる。
 
 ページ右上に言語切り替え(English/日本語)がある。切り替えるとその場でページ全体が翻訳され、即座に保存される(下の「保存」ボタンとは独立)。次回`configui`を開いたときも覚えている(`config.toml`の`[configui]`セクションに記録)。既定は英語。
 
@@ -300,9 +316,23 @@ reactive_speed = 2       # 1-4、reactiveで使用
 
 **実機検証状況(2026-07-21)**: `off`/`static`/`spectrum`は目視確認済み。`breathing`/`wave`/`reactive`は同じコマンド形状のため動作する可能性が高いが未個別確認。期待通りに光らない場合は`tasks/run.log`の`Lighting: ...`行、および`WARNING: failed to send lighting ...`が出ていないか確認。per-key単位で1キーずつ違う色を指定する機能は未実装。
 
-### 6. Hypershiftレイヤー
+### 6. ハイパーシフト(「Hyper Response」ボタン)
 
-本体左上の「Hyper Response」ボタン(D-padの隣、Razer公式の名称は"D")を押している間だけ、20個のアナログキーが`config.toml`の`[keys.layer1]`側の割り当てに切り替わる。離すと`[keys.default]`に戻る。押している間、Alt自体はOSに送られない(元のボタンがAltキーコードを送る仕様のため、意図的にブロックしている)。
+**v1.0.5で新規**: 本体左上の「Hyper Response」ボタン(D-padの隣、Razer公式の名称は"D")の動作は、`config.toml`の`[hypershift]`セクション(または`configui`の「ハイパーシフト」パネル)で設定できるようになった:
+
+| `mode` | 動作 |
+|---|---|
+| `"layer_switch"`(既定) | このボタンで`[keys.default]`/`[keys.layer1]`/`[keys.layer2]`のどれが有効かを切り替える — 詳細は下の`switch_style`を参照 |
+| `"modifier_key"` | レイアウト切替は一切行わず、ボタンの押下/解放時に`modifier_key`(既定`LALT`)をそのまま送信する、通常のキーと同じ動作になる |
+
+`mode = "layer_switch"`のとき、`switch_style`で切替方式を選べる:
+
+| `switch_style` | 動作 |
+|---|---|
+| `"momentary"`(既定・v1.0.0〜v1.0.4までと同じ挙動) | 押している間はLayer1、離すと通常レイヤーに戻る。常に2レイアウトのみ — `layer_count`は無視される |
+| `"toggle"` | 押すたびに1レイヤーずつ進み、末尾で先頭に戻る(`layer_count = 2`: 通常⇔Layer1、`layer_count = 3`: 通常→Layer1→Layer2→通常→…)。離す動作は何もしない |
+
+通常レイヤー以外が有効な間、Alt自体はOSに送られない(元のボタンがAltキーコードを送る仕様のため、押下/解放の検知には使うが`mode`/`switch_style`によらず意図的にブロックしている)。
 
 **2026-07-21修正**: 以前はこのAlt検知がソースデバイスを判別しない`WH_KEYBOARD_LL`フックで実装されていたため、`tartarus_driver`が動いている間は実キーボードのAlt(Alt+Tab、Alt+F4等)も一緒にOSに届かなくなる問題があった。現在はD-pad同様Interception経由のデバイス判別処理に統一されており、**Tartarus本体のAlt(Hyper Response)だけが対象になる。実キーボードのAlt+Tab等は影響を受けない**(実機確認済み)。
 

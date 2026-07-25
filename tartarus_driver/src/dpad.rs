@@ -265,10 +265,11 @@ fn interception_device_is_tartarus(ctx: &Interception, device: Device) -> bool {
 // Handles one received keyboard stroke. Confirmed-Tartarus arrow strokes are
 // suppressed (never forwarded) and remapped to the placeholder test key via
 // the existing SendInput-based helper; a confirmed-Tartarus Alt press/
-// release (the Hyper Response / Hypershift trigger) is suppressed and toggles
-// hypershift::HYPERSHIFT_ACTIVE with no replacement key at all; everything
-// else — non-arrow/non-Alt keys, plain (non-E0) numpad presses, and ANY event
-// from a device that is not a positively-identified Tartarus — is forwarded
+// release (the Hyper Response / Hypershift trigger) is suppressed and routed
+// through hypershift::on_trigger_edge (which layer/key it produces depends on
+// config.toml's [hypershift] — see hypershift.rs); everything else —
+// non-arrow/non-Alt keys, plain (non-E0) numpad presses, and ANY event from a
+// device that is not a positively-identified Tartarus — is forwarded
 // unmodified via ctx.send() (fail open).
 //
 // 2026-07-21: Hypershift's Alt detection MOVED HERE from a global
@@ -283,8 +284,8 @@ fn interception_device_is_tartarus(ctx: &Interception, device: Device) -> bool {
 // hypershift.rs's hook thread is now only a FALLBACK for when Interception
 // itself isn't installed/running (see run_interception_thread) — this
 // function's Alt handling and that hook's Alt handling are mutually
-// exclusive at runtime, never both active, so HYPERSHIFT_ACTIVE is never
-// double-toggled by two sources for the same physical press.
+// exclusive at runtime, never both active, so on_trigger_edge is never
+// double-fired by two sources for the same physical press.
 fn handle_interception_keyboard(
     ctx: &Interception,
     device: Device,
@@ -298,12 +299,11 @@ fn handle_interception_keyboard(
 
     if from_tartarus && raw_code == SCANCODE_ALT {
         let key_down = !state.contains(KeyState::UP);
-        crate::hypershift::HYPERSHIFT_ACTIVE.store(key_down, std::sync::atomic::Ordering::SeqCst);
         println!(
-            "[dpad] Tartarus Hyper Response (Alt) {} -> Hypershift {}",
-            if key_down { "DOWN" } else { "UP  " },
-            if key_down { "ACTIVE" } else { "inactive" }
+            "[dpad] Tartarus Hyper Response (Alt) {} edge detected",
+            if key_down { "DOWN" } else { "UP  " }
         );
+        crate::hypershift::on_trigger_edge(key_down);
         // Original stroke intentionally NOT forwarded: suppressed at the
         // driver, exactly like the D-pad arrows below — the trigger key's
         // own keycode never reaches the OS (Purpose.md §6② requirement).
