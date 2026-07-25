@@ -117,7 +117,7 @@ const SCANCODE_LEFT: u16 = ScanCode::Numpad4 as u16;
 const SCANCODE_RIGHT: u16 = ScanCode::Numpad6 as u16;
 const SCANCODE_DOWN: u16 = ScanCode::Numpad2 as u16;
 
-// Alt scan code (Purpose.md §6②, Hypershift). Unlike the arrow-key/numpad
+// Alt scan code (docs/DESIGN.md §6②, Hypershift). Unlike the arrow-key/numpad
 // overlap above, Left Alt and Right Alt share this SAME raw code (0x38) on
 // the base PC/XT set — Right Alt is just the E0-extended version of it, the
 // same convention as Right Ctrl vs Left Ctrl — so no E0 check is needed
@@ -131,8 +131,8 @@ const SCANCODE_ALT: u16 = ScanCode::LeftAlt as u16;
 // TEST_KEYMAP. The letters deliberately avoid everything TEST_KEYMAP
 // ('1'..'0', 'A'..'J') and LAYER1_TEST_KEYMAP (F1..F20) already use (which
 // rules out the obvious W/A/S/D set: A and D are taken), so remapped output
-// is unambiguous during testing. These are config.rs's built-in defaults for
-// the D-pad/wheel/middle-click (see config::DriverConfig::defaults()).
+// is unambiguous during testing. These are the config module's built-in
+// defaults for the D-pad/wheel/middle-click (see config::DriverConfig::defaults()).
 pub const DPAD_ARROW_TEST_KEYMAP_LEFT: VIRTUAL_KEY = VIRTUAL_KEY(0x4B); // 'K'
 pub const DPAD_ARROW_TEST_KEYMAP_UP: VIRTUAL_KEY = VIRTUAL_KEY(0x57); // 'W'
 pub const DPAD_ARROW_TEST_KEYMAP_RIGHT: VIRTUAL_KEY = VIRTUAL_KEY(0x4C); // 'L'
@@ -143,7 +143,7 @@ pub const MIDDLE_CLICK_TEST_KEY: VIRTUAL_KEY = VIRTUAL_KEY(0x4D); // middle clic
 
 // Maps an arrow scan code to its configured remap key (Phase 4: from
 // config.toml, or the built-in placeholder defaults if unset — see
-// config.rs). Returns None for anything that is not one of the four arrow
+// config/load.rs). Returns None for anything that is not one of the four arrow
 // scan codes (including plain numpad presses without the E0 flag, which the
 // caller filters separately).
 fn dpad_arrow_test_key_for(scancode: u16, dpad: &DpadKeymap) -> Option<VIRTUAL_KEY> {
@@ -306,7 +306,7 @@ fn handle_interception_keyboard(
         crate::hypershift::on_trigger_edge(key_down);
         // Original stroke intentionally NOT forwarded: suppressed at the
         // driver, exactly like the D-pad arrows below — the trigger key's
-        // own keycode never reaches the OS (Purpose.md §6② requirement).
+        // own keycode never reaches the OS (docs/DESIGN.md §6② requirement).
         return;
     }
 

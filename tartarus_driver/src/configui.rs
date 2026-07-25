@@ -2,11 +2,13 @@
 // external network exposure) serving a single-page key-remap editor. Reads
 // the current config.toml (or built-in defaults if none exists) on every GET
 // so the page always reflects what's actually on disk, and validates +
-// overwrites config.toml wholesale on save. This is a separate, short-lived
-// process invocation (`cargo run --release -- configui`) from the normal
-// analog-read driver loop — the two are never expected to run at the same
-// time, and there is no live hot-reload: after saving, the user restarts the
-// normal `tartarus_driver` run for the new mapping to take effect.
+// overwrites config.toml wholesale on save. Usually a separate process
+// invocation (`cargo run --release -- configui`), but `tray` mode also runs
+// this same server on its own thread inside the main driver process (see
+// run_tray_mode in main.rs) — the two are expected to run at the same time
+// in that case. Either way, saving here never needs a restart to take
+// effect: a running `tartarus_driver` picks up config.toml changes on its
+// own within about a second (v1.0.6 hot-reload, main.rs's run_driver loop).
 
 use crate::config::{ConfigPayload, DriverConfig};
 use crate::vkname::key_names_grouped;
@@ -318,6 +320,9 @@ fn handle_request(request: tiny_http::Request) {
             let json = serde_json::to_string(&live).unwrap_or_else(|_| "{\"active\":false,\"depths\":[]}".to_string());
             request.respond(json_response(json, 200))
         }
+        (Method::Get, "/api/version") => {
+            request.respond(json_response(format!("{{\"version\":{:?}}}", crate::VERSION), 200))
+        }
         (Method::Get, "/api/config") => {
             let cfg: DriverConfig = crate::config::load();
             let payload = ConfigPayload::from_driver_config(&cfg);
@@ -333,7 +338,7 @@ fn handle_request(request: tiny_http::Request) {
                     request,
                     payload.validate_and_save(),
                     Some(
-                        "configui: config.toml を更新しました。tartarus_driver を再起動すると新しい割り当てが反映されます。",
+                        "configui: config.toml を更新しました。動作中の tartarus_driver は約1秒以内に自動で新しい割り当てを反映します。",
                     ),
                     "保存エラー",
                 ),

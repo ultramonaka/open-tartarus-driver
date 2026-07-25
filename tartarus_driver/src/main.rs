@@ -1,7 +1,7 @@
 use hidapi::HidApi;
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 mod config;
@@ -10,6 +10,8 @@ mod dpad;
 mod emulate;
 mod hypershift;
 mod lighting;
+mod logging;
+mod razer_hid;
 mod tray;
 mod vkname;
 use windows::Win32::Foundation::BOOL;
@@ -19,163 +21,34 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VIRTUAL_KEY,
 };
 
-// ===========================================================================
-// Locating config.toml / tasks/run.log relative to where the binary is
-// actually running from
-// ===========================================================================
-//
-// A prior version resolved these paths at COMPILE time via
-// `env!("CARGO_MANIFEST_DIR")`. That bakes in the absolute path of whichever
-// machine built the binary — harmless for a local `cargo build`, but it means
-// a binary built on a CI runner (e.g. `D:\a\open-tartarus-driver\...`) ships
-// with that CI path hardcoded, so config.toml/run.log can never be found on
-// a user's machine no matter where the exe is placed (confirmed in the wild
-// via the GitHub Actions release build). Resolved at runtime instead:
-//   - Distributed build: the exe sits next to config.toml/tasks/ (the layout
-//     `release.yml` packages), so its own directory is the right base.
-//   - Dev build (`cargo run`/`cargo build`, debug or release): the exe lives
-//     under `tartarus_driver/target/<profile>/`, so walk back up past
-//     `target/<profile>` and the crate dir to the repo root, matching where
-//     config.toml has always lived for development.
-pub fn app_root() -> std::path::PathBuf {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    let looks_like_build_profile_dir = exe_dir
-        .file_name()
-        .is_some_and(|n| n == "debug" || n == "release");
-    if looks_like_build_profile_dir
-        && let Some(target_dir) = exe_dir.parent()
-        && target_dir.file_name().is_some_and(|n| n == "target")
-        && let Some(repo_root) = target_dir.parent().and_then(|p| p.parent())
-    {
-        return repo_root.to_path_buf();
-    }
-    exe_dir
+// Re-exported at the crate root so existing `crate::X` call sites elsewhere
+// in the crate (config/load.rs, config/payload.rs, configui.rs, lighting.rs)
+// don't need to change just because this code now lives in its own module —
+// see logging.rs / razer_hid.rs for the actual implementations.
+pub use logging::config_path;
+pub use razer_hid::{analog_device_infos, build_razer_cmd, open_razer_control_device, ANALOG_REPORT_ID};
+
+// Phase 4: loaded at startup (config.toml if present, else built-in
+// placeholder defaults — see config/load.rs). v1.0.6: an `RwLock<Option<Arc<_>>>`
+// rather than the earlier `OnceLock` specifically so `run_driver`'s loop can
+// hot-swap it when config.toml changes on disk (see its ~1s mtime-poll
+// block) without needing a reference threaded through every function —
+// the Interception thread and the main analog-read loop both just call
+// `cfg()` fresh whenever they need it. Reads (`cfg()`) are a cheap
+// refcount-bump `Arc` clone; writes (reloads) happen at most ~once/sec, so
+// there's no meaningful lock contention either way.
+static CONFIG: RwLock<Option<Arc<config::DriverConfig>>> = RwLock::new(None);
+fn cfg() -> Arc<config::DriverConfig> {
+    CONFIG
+        .read()
+        .unwrap()
+        .clone()
+        .expect("CONFIG must be set at the start of main() before anything reads it")
+}
+fn set_cfg(new_cfg: config::DriverConfig) {
+    *CONFIG.write().unwrap() = Some(Arc::new(new_cfg));
 }
 
-pub fn config_path() -> std::path::PathBuf {
-    app_root().join("config.toml")
-}
-
-fn log_path() -> std::path::PathBuf {
-    app_root().join("tasks").join("run.log")
-}
-
-// ===========================================================================
-// Always-on file logging
-// ===========================================================================
-//
-// Piping stdout through `Tee-Object` from PowerShell has repeatedly failed in
-// practice (wrong shell cwd, mangled multi-line pastes, etc.), losing test
-// output. So the program writes its own log directly, independent of however
-// it's invoked.
-//
-// The actual disk write happens on its own background thread, off of
-// whichever thread called println!/eprintln!. This matters because the
-// D-pad/wheel/Hypershift path (dpad.rs) and the analog key-read loop below
-// both log on every single keystroke/wheel-notch transition, on the same
-// thread that's also responsible for actually forwarding/remapping that
-// event as fast as possible — a synchronous file write (a syscall, however
-// fast) sitting in that path directly adds to input latency, which runs
-// against this project's whole point. println!/eprintln! now only do a
-// cheap in-memory channel send; the writer thread does the real I/O
-// whenever it gets to it, however far behind that ends up being.
-static LOG_SENDER: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
-
-fn init_log_file() {
-    let path = log_path();
-    // `tasks/` isn't published in the public repo (development-history
-    // working notes, gitignored — see .gitignore), so a fresh clone/release
-    // download won't have this directory at all; File::create alone would
-    // fail since it never creates missing parent directories.
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    match std::fs::File::create(&path) {
-        Ok(mut file) => {
-            let (tx, rx) = std::sync::mpsc::channel::<String>();
-            let _ = LOG_SENDER.set(tx);
-            std::thread::spawn(move || {
-                use std::io::{Seek, Write};
-                // `tray` mode is meant to run for days at a time, and every
-                // keystroke/wheel-notch transition logs a line — cap the
-                // file at ~5 MiB instead of growing it unbounded for the
-                // life of the process. Restarting the file (rather than
-                // deleting/renaming) keeps this thread's single open handle
-                // valid throughout.
-                const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
-                let mut written: u64 = 0;
-                for line in rx {
-                    if written >= MAX_LOG_BYTES {
-                        let _ = file.set_len(0);
-                        let _ = file.rewind();
-                        let _ = file.write_all(b"[log truncated at ~5 MiB; continuing]\n");
-                        written = 0;
-                    }
-                    written += line.len() as u64 + 1;
-                    let _ = file.write_all(line.as_bytes());
-                    let _ = file.write_all(b"\n");
-                }
-            });
-            std::println!("Logging to {}", path.display());
-        }
-        Err(e) => std::eprintln!(
-            "WARNING: could not open log file {}: {e} (console-only)",
-            path.display()
-        ),
-    }
-}
-
-// Shadow println!/eprintln! everywhere below this point so every existing
-// call site gets file logging for free, with zero other changes needed.
-// #[macro_export] (rather than relying on textual scoping) so config.rs /
-// configui.rs can use them too via `crate::{println, eprintln}` regardless
-// of where `mod config;` etc. appear relative to these definitions.
-#[macro_export]
-macro_rules! println {
-    () => {{ std::println!(); }};
-    ($($arg:tt)*) => {{
-        let s = format!($($arg)*);
-        std::println!("{s}");
-        if let Some(tx) = $crate::LOG_SENDER.get() {
-            let _ = tx.send(s);
-        }
-    }};
-}
-#[macro_export]
-macro_rules! eprintln {
-    () => {{ std::eprintln!(); }};
-    ($($arg:tt)*) => {{
-        let s = format!($($arg)*);
-        std::eprintln!("{s}");
-        if let Some(tx) = $crate::LOG_SENDER.get() {
-            let _ = tx.send(s);
-        }
-    }};
-}
-
-// Phase 4: loaded once at startup (config.toml if present, else built-in
-// placeholder defaults — see config.rs). A OnceLock rather than passing a
-// reference through every function because the Interception thread and the
-// main analog-read loop both need it and are set up independently; it is
-// written exactly once, before either thread starts using it, so there is no
-// mutation race.
-static CONFIG: OnceLock<config::DriverConfig> = OnceLock::new();
-fn cfg() -> &'static config::DriverConfig {
-    CONFIG.get().expect("CONFIG must be set at the start of main() before anything reads it")
-}
-
-const VID: u16 = 0x1532;
-const PID: u16 = 0x0244;
-
-// Interface 1 / endpoint 0x82 emits this report ID for the 20 analog keys.
-// Reverse-engineered via USBPcap capture on 2026-07-18 (tasks/capture.pcap):
-// byte[0] = report ID, byte[1..=20] = one 0-255 depth value per physical key.
-// Confirmed 2026-07-18 (tasks/keymap_log.txt): byte offset N == the number
-// printed on keycap N (identity mapping, no permutation).
-const ANALOG_REPORT_ID: u8 = 0x06;
 const NUM_KEYS: usize = 20;
 
 // Phase v1.0.5 (Hyper Shift redesign): the analog keymap now holds up to 3
@@ -185,8 +58,8 @@ const NUM_KEYS: usize = 20;
 // exactly layers 0/1 regardless of layer_count (see hypershift.rs).
 pub const MAX_LAYERS: usize = 3;
 
-// Hysteresis thresholds per Purpose.md §6.1 (recommended values). Phase 4:
-// these are now specifically the BUILT-IN DEFAULT used by config.rs
+// Hysteresis thresholds per docs/DESIGN.md §6.1 (recommended values). Phase 4:
+// these are now specifically the BUILT-IN DEFAULT used by the config module
 // whenever config.toml has no [actuation] section (or an invalid t_on/t_off
 // pair) — see config::DriverConfig::defaults(). The actual analog loop below
 // always reads the live values via cfg().actuation, never these consts
@@ -196,7 +69,7 @@ const T_OFF: u8 = 80;
 
 // TEST/PLACEHOLDER keymap — not a real layout, just enough to prove the
 // hysteresis + SendInput pipeline end to end. key01..key20 -> '1'..'9','0','A'..'J'.
-// Phase 4: this is now specifically the BUILT-IN DEFAULT used by config.rs
+// Phase 4: this is now specifically the BUILT-IN DEFAULT used by the config module
 // whenever config.toml doesn't override a given key (or doesn't exist at
 // all) — see config::DriverConfig::defaults(). Editing this array changes
 // what a machine with no config.toml (or an incomplete one) falls back to.
@@ -316,7 +189,7 @@ fn send_key(vk: VIRTUAL_KEY, key_up: bool) {
     }
 }
 
-// Purpose.md §6② step 3: on the transition BACK TO Default (from any other
+// docs/DESIGN.md §6② step 3: on the transition BACK TO Default (from any other
 // layer — not on every transition, and specifically not on the Default ->
 // Layer1/Layer2 press edge), force-send KeyUp for every key still logically
 // down so nothing stays stuck sending a non-Default layer's key after
@@ -396,98 +269,10 @@ pub(crate) fn process_key_depths(
     }
 }
 
-// Filters hidapi's device list down to the Tartarus Pro's collections that
-// are actually readable: matching VID/PID, minus the two boot collections
-// (Usage Page 0x01, Usage 0x02 "Mouse" / 0x06 "Keyboard") that Windows' HID
-// class driver claims exclusively (ReadFile on them always fails with
-// ACCESS_DENIED). Shared by open_analog_devices below (which exits the
-// process if this comes back empty — fine for the driver's fail-fast CLI
-// startup) and configui's try_open_analog_devices (which must fail soft
-// instead, since it runs inside the long-lived config web server).
-pub(crate) fn analog_device_infos(api: &HidApi) -> Vec<hidapi::DeviceInfo> {
-    api.device_list()
-        .filter(|d| d.vendor_id() == VID && d.product_id() == PID)
-        .filter(|d| !(d.usage_page() == 0x0001 && (d.usage() == 0x0002 || d.usage() == 0x0006)))
-        .cloned()
-        .collect()
-}
-
-fn open_analog_devices(api: &HidApi) -> Vec<(i32, hidapi::HidDevice)> {
-    let infos = analog_device_infos(api);
-
-    if infos.is_empty() {
-        eprintln!(
-            "Tartarus Pro (VID {:#06x} / PID {:#06x}) not found. Is it plugged in?",
-            VID, PID
-        );
-        std::process::exit(1);
-    }
-
-    let mut devices = Vec::new();
-    for info in &infos {
-        match info.open_device(api) {
-            Ok(device) => {
-                if let Err(e) = device.set_blocking_mode(false) {
-                    eprintln!(
-                        "[if{}] failed to set non-blocking mode: {e}",
-                        info.interface_number()
-                    );
-                    continue;
-                }
-                devices.push((info.interface_number(), device));
-            }
-            Err(e) => {
-                eprintln!(
-                    "[if{}] failed to open (skipping): {e}",
-                    info.interface_number()
-                );
-            }
-        }
-    }
-
-    if devices.is_empty() {
-        eprintln!("No interfaces could be opened.");
-        std::process::exit(1);
-    }
-
-    devices
-}
-
-fn open_razer_control_device(api: &HidApi) -> Option<hidapi::HidDevice> {
-    let info = api
-        .device_list()
-        .find(|d| d.vendor_id() == VID && d.product_id() == PID && d.usage_page() == 0x0001 && d.usage() == 0x0002)?
-        .clone();
-    match info.open_device(api) {
-        Ok(d) => Some(d),
-        Err(e) => {
-            eprintln!("[razer] Interface 2 (Razer Control Device) open failed: {e}");
-            None
-        }
-    }
-}
-
-// Build an arbitrary razer_report (91 bytes incl. leading report-ID 0 byte).
-// CRC = XOR of struct bytes 2..88 (i.e. buf[3..89] here, after the report-ID byte).
-fn build_razer_cmd(txn: u8, class: u8, cmd: u8, args: &[u8]) -> [u8; 91] {
-    let mut buf = [0u8; 91];
-    buf[2] = txn;
-    buf[6] = args.len() as u8; // data_size
-    buf[7] = class;
-    buf[8] = cmd;
-    buf[9..9 + args.len()].copy_from_slice(args);
-    let mut crc = 0u8;
-    for b in &buf[3..89] {
-        crc ^= *b;
-    }
-    buf[89] = crc;
-    buf
-}
-
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
-    init_log_file();
+    logging::init_log_file();
     println!("tartarus_driver v{VERSION}");
 
     let subcommand = env::args().nth(1);
@@ -512,7 +297,7 @@ fn main() {
     // `rawinputlog`) were removed 2026-07-20 once Phase 1-3 and the
     // Interception-based D-pad/wheel/middle-click remap were all fully
     // verified on real hardware and superseded them — their findings are
-    // preserved in `tasks/research/` and this file's other doc comments
+    // preserved in `docs/research_internal.md` and this file's other doc comments
     // (e.g. the device-mode-3 unlock sequence right below, and the
     // Interception module doc comment above `run_interception_thread`).
     // Interception's own per-event "[dpad] Interception device N hardware
@@ -565,21 +350,25 @@ fn run_tray_mode() {
 fn run_driver(run_forever: bool, duration_secs: u64) {
     let api = HidApi::new().expect("hidapi init failed");
 
-    // Reverse-engineered 2026-07-18 (see try_razer_mode / tasks/research
-    // findings report): the device only streams analog reports on Interface 1
+    // Reverse-engineered 2026-07-18 (see try_razer_mode / docs/research_internal.md
+    // §2): the device only streams analog reports on Interface 1
     // after Interface 2 (Razer Control Device) is told to enter "device mode 3"
     // via this class-0x00/cmd-0x04 feature report. Synapse sends this at
     // startup and mode 0 on exit; this is the *entire* lock/unlock mechanism —
     // no Synapse process needs to be running, we just need to send this once.
-    let devices = open_analog_devices(&api);
+    let devices = razer_hid::open_analog_devices(&api);
 
     // Phase 4: load config.toml (or built-in placeholder defaults) once,
     // before either the Hypershift hook thread or the Interception thread
-    // starts — both read it via cfg() and neither ever mutates it. Loaded
-    // here (rather than after the unlock block below) because the lighting
-    // command, if any is configured, is sent once at startup right
-    // alongside the mode-3 unlock, using the same Interface 2 handle.
-    CONFIG.set(config::load()).ok();
+    // starts — both read it via cfg() fresh on every event, and v1.0.6's
+    // hot-reload (below) is the only thing that ever calls set_cfg() again
+    // after this. Loaded here (rather than after the unlock block below)
+    // because the lighting command, if any is configured, is sent once at
+    // startup right alongside the mode-3 unlock, using the same Interface 2
+    // handle.
+    set_cfg(config::load());
+    let mut config_mtime = logging::config_mtime_now();
+    let mut last_reload_check = Instant::now();
 
     // Kept open (not just a local inside this block) for the lifetime of the
     // function: the layer-indicator LED (below) needs to send a command on
@@ -618,7 +407,7 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
 
     // D-pad / wheel / middle-click remap via the Interception kernel driver
     // (see the module doc comment in dpad.rs for the full design, and
-    // README.md "既知の制約" for driver install steps). Phase 3 (Purpose.md
+    // README.md "既知の制約" for driver install steps). Phase 3 (docs/DESIGN.md
     // §6②) Hypershift trigger detection now lives INSIDE this too (as of
     // 2026-07-21 — see handle_interception_keyboard in dpad.rs): the old
     // unconditional hook-based approach blocked Alt on every keyboard, not
@@ -632,7 +421,7 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
     // one that opened them silently returned zero reports in testing on
     // Windows (2026-07-18) even though the exact same read loop works fine
     // on the opening thread. So for now this stays single-threaded: read +
-    // hysteresis + SendInput all happen in the same loop. Revisit Purpose.md's
+    // hysteresis + SendInput all happen in the same loop. Revisit docs/DESIGN.md's
     // two-thread split later if this turns out to matter for latency.
     // Per-key "logically down" tracking. Some(vk) = down, storing the VK that
     // was actually sent at press time, so KeyUp (normal, forced-by-layer-exit,
@@ -645,6 +434,46 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
     let mut buf = [0u8; 64];
 
     while !SHUTDOWN_REQUESTED.load(Ordering::SeqCst) && (run_forever || start.elapsed() < deadline) {
+        // v1.0.6 hot-reload: check config.toml's mtime at most once/sec (a
+        // stat() syscall on every 500us tick would be wasteful; ~1s is
+        // still plenty responsive for "saved via configui or a text
+        // editor"). try_reload() either returns a fully-parsed new config
+        // (swapped in below) or None (old config kept as-is) — see its doc
+        // comment in config/load.rs for why a syntax error must never fall back
+        // to hardcoded defaults on a live reload the way startup's load()
+        // does.
+        if last_reload_check.elapsed() >= Duration::from_secs(1) {
+            last_reload_check = Instant::now();
+            let mtime = logging::config_mtime_now();
+            if mtime != config_mtime {
+                config_mtime = mtime;
+                match config::try_reload() {
+                    Some(new_cfg) => {
+                        set_cfg(new_cfg);
+                        println!("config.toml reloaded — new settings now active.");
+                        // Any keymap/actuation/layer meaning a currently-held
+                        // key had may no longer be valid under the new
+                        // config: force a clean reset, same spirit as the
+                        // "returned to Default" edge below.
+                        force_keyup_on_layer_change(&mut pressed_vk, start);
+                        hypershift::CURRENT_LAYER.store(0, Ordering::SeqCst);
+                        if let Some(ctrl) = &ctrl {
+                            if let Some(lighting_cfg) = &cfg().lighting {
+                                lighting::apply(ctrl, lighting_cfg);
+                            }
+                            if let Some(indicator) = &cfg().layer_indicator {
+                                lighting::set_layer_indicator(ctrl, &indicator.color, false);
+                            }
+                        }
+                    }
+                    None => eprintln!(
+                        "WARNING: config.toml changed but could not be reloaded (missing or \
+                         invalid TOML) — keeping the previous settings until this is fixed."
+                    ),
+                }
+            }
+        }
+
         let layer = hypershift::CURRENT_LAYER.load(Ordering::SeqCst) as usize;
 
         // On any Hyper Shift layer change: reflect it on the indicator LED
@@ -660,7 +489,7 @@ fn run_driver(run_forever: bool, duration_secs: u64) {
         // Force-send KeyUp for every key still logically down, but ONLY on
         // the transition back to Default (from any other layer) — NOT on
         // every transition. This matches the original, hardware-verified
-        // momentary design exactly (Purpose.md §6② step 3): a key already
+        // momentary design exactly (docs/DESIGN.md §6② step 3): a key already
         // held when Hyper Shift engages keeps sending whatever it was
         // pressed with for the rest of that hold, and only gets forcibly
         // reset when the layer returns to Default. v1.0.5 initially

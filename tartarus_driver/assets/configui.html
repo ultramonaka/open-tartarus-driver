@@ -37,7 +37,9 @@
     line-height: 1.5;
   }
   .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .title-group { display: flex; align-items: baseline; gap: 0.5rem; }
   h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+  .version-tag { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
   .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
   #language-select {
     padding: 0.3rem 0.5rem;
@@ -162,15 +164,19 @@
 </head>
 <body>
   <div class="titlebar">
-    <h1 data-i18n="pageTitle">Tartarus Pro Key Remap Settings</h1>
+    <div class="title-group">
+      <h1 data-i18n="pageTitle">Tartarus Pro Key Remap Settings</h1>
+      <span id="version-tag" class="version-tag"></span>
+    </div>
     <select id="language-select">
       <option value="en">English</option>
       <option value="ja">日本語</option>
     </select>
   </div>
   <p class="sub" data-i18n-html="subtitleHtml">
-    Saving overwrites <code>config.toml</code>. Restart <code>tartarus_driver</code> for changes to take
-    effect (this page itself never reads keystrokes).
+    Saving overwrites <code>config.toml</code>. If <code>tartarus_driver</code> is already running, it
+    picks up the change automatically within about a second — no restart needed (this page itself never
+    reads keystrokes).
   </p>
 
   <div class="panel">
@@ -342,7 +348,7 @@
 const I18N = {
   en: {
     pageTitle: "Tartarus Pro Key Remap Settings",
-    subtitleHtml: 'Saving overwrites <code>config.toml</code>. Restart <code>tartarus_driver</code> for changes to take effect (this page itself never reads keystrokes).',
+    subtitleHtml: 'Saving overwrites <code>config.toml</code>. If <code>tartarus_driver</code> is already running, it picks up the change automatically within about a second — no restart needed (this page itself never reads keystrokes).',
     panelAnalog: "Analog Keys (20 keys)",
     thKey: "Key",
     thDefaultLayer: "Default Layer",
@@ -405,7 +411,7 @@ const I18N = {
     hintLayerIndicatorHtml: 'When enabled, the side indicator LED lights up whenever a non-Default layer (Layer1/Layer2) is active — in the "Hyper Shift" panel above, this means Momentary while held, or Toggle whenever it has cycled away from Default — and turns off on Default. Not used at all in Modifier Key mode (the layer never changes). This is a separate LED (one of the 3 side LEDs) from the main key lighting panel above, so it doesn\'t interfere with effects like Spectrum. OpenRazer itself doesn\'t implement this for the Tartarus Pro either, so it\'s unverified on real hardware (research-based, see <code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>). If it doesn\'t light up, check <code>tasks/run.log</code> for <code>WARNING: failed to send layer indicator ...</code>.',
     btnSave: "Save",
     statusSaving: "Saving...",
-    statusSaved: "Saved. Restart tartarus_driver to apply.",
+    statusSaved: "Saved. Applies automatically within ~1s if tartarus_driver is running.",
     statusErrorPrefix: "Error: ",
     statusNetworkErrorPrefix: "Network error: ",
     calibPromptPressKeys: "Try pressing keys...",
@@ -414,7 +420,7 @@ const I18N = {
   },
   ja: {
     pageTitle: "Tartarus Pro キーリマップ設定",
-    subtitleHtml: '保存すると <code>config.toml</code> を上書きします。反映するには <code>tartarus_driver</code> を再起動してください(このページ自体はキー入力を監視しません)。',
+    subtitleHtml: '保存すると <code>config.toml</code> を上書きします。<code>tartarus_driver</code> が既に動いていれば、約1秒以内に自動的に反映されます(再起動不要。このページ自体はキー入力を監視しません)。',
     panelAnalog: "アナログキー (20キー)",
     thKey: "キー",
     thDefaultLayer: "通常レイヤー",
@@ -477,7 +483,7 @@ const I18N = {
     hintLayerIndicatorHtml: '有効にすると、側面のインジケータLEDが通常レイヤー以外(Layer1/Layer2)が有効な間点灯し、通常レイヤーに戻ると消灯する — 上の「ハイパーシフト」パネルでモーメンタリなら押している間、トグルなら通常レイヤーから切り替わっている間。修飾キーモードでは一切使われない(レイヤーが変化しないため)。上の「ライティング (LED)」パネルのメインキー照明とは別系統のLED(側面の3灯のうち1つ)なので、スペクトラム等のメイン照明を邪魔しない。このプロトコルはOpenRazer自体もTartarus Proでは未実装のため実機で未検証(調査ベース、<code>tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md</code>参照)。光らない場合は<code>tasks/run.log</code>の<code>WARNING: failed to send layer indicator ...</code>を確認。',
     btnSave: "保存",
     statusSaving: "保存中...",
-    statusSaved: "保存しました。反映するには tartarus_driver を再起動してください。",
+    statusSaved: "保存しました。tartarus_driverが動いていれば約1秒以内に自動反映されます。",
     statusErrorPrefix: "エラー: ",
     statusNetworkErrorPrefix: "通信エラー: ",
     calibPromptPressKeys: "キーを押してみてください...",
@@ -596,12 +602,16 @@ function pickerValue(idPrefix) {
 }
 
 async function init() {
-  const [options, config] = await Promise.all([
+  const [options, config, versionInfo] = await Promise.all([
     fetch('/api/key-options').then(r => r.json()),
     fetch('/api/config').then(r => r.json()),
+    fetch('/api/version').then(r => r.json()).catch(() => null),
   ]);
   KEY_CATEGORIES = options;
   applyLanguage(config.language || 'en');
+  if (versionInfo && versionInfo.version) {
+    document.getElementById('version-tag').textContent = 'v' + versionInfo.version;
+  }
 
   const tbody = document.getElementById('analog-body');
   const rows = [];

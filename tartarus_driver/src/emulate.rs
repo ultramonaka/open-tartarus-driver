@@ -133,7 +133,7 @@ fn handle_command(
 }
 
 pub fn run_emulator() {
-    crate::CONFIG.set(config::load()).ok();
+    crate::set_cfg(config::load());
 
     println!("tartarus_driver emulate mode — no HID device, no Interception, no hardware needed.");
     print_help();
@@ -187,13 +187,12 @@ mod tests {
     // in the crate's test suite touches either static, so this one test
     // owning all of it is safe. (on_trigger_edge_with itself takes its
     // HypershiftConfig by parameter — see hypershift.rs — specifically so
-    // the toggle/modifier_key assertions below don't need a second,
-    // differently-configured CONFIG, which the OnceLock couldn't provide
-    // anyway once handle_command's own calls have already initialized it
-    // with DriverConfig::defaults().)
+    // the toggle/modifier_key assertions below don't need to mutate the
+    // shared CONFIG a second time with a differently-configured
+    // DriverConfig just to exercise those two modes.)
     #[test]
     fn handle_command_dispatches_tap_hold_depth_and_hyper() {
-        crate::CONFIG.get_or_init(crate::config::DriverConfig::defaults);
+        crate::set_cfg(crate::config::DriverConfig::defaults());
         let start = Instant::now();
         let mut depths = [0u8; NUM_KEYS];
         let mut pressed_vk: [Option<VIRTUAL_KEY>; NUM_KEYS] = [None; NUM_KEYS];
@@ -224,7 +223,7 @@ mod tests {
 
         // "hyper down"/"hyper up" drive CURRENT_LAYER via the default config
         // (layer_switch + momentary), and force-release held keys on the
-        // change back to Default only (Purpose.md §6② step 3).
+        // change back to Default only (docs/DESIGN.md §6② step 3).
         crate::hypershift::CURRENT_LAYER.store(0, Ordering::SeqCst);
         assert!(handle_command("hyper down", &mut depths, &mut pressed_vk, start));
         assert_eq!(crate::hypershift::CURRENT_LAYER.load(Ordering::SeqCst), 1);

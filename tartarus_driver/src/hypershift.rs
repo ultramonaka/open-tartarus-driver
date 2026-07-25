@@ -1,4 +1,4 @@
-// Phase 3 (Purpose.md §6②), redesigned in v1.0.5: the physical "Hyper
+// Phase 3 (docs/DESIGN.md §6②), redesigned in v1.0.5: the physical "Hyper
 // Response" thumb button.
 //
 // The button is invisible on every HID collection we can open — in its

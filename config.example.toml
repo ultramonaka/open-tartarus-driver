@@ -16,7 +16,7 @@
 # "VOLUME_MUTE", "VOLUME_DOWN", "VOLUME_UP". An unrecognized name (typo,
 # wrong case handled automatically but an unknown word is not) falls back to
 # the built-in default for that one entry and prints a warning to
-# tasks/run.log — it never crashes the driver or breaks other entries.
+# logs/run.log — it never crashes the driver or breaks other entries.
 #
 # [keys.default] / [keys.layer1] / [keys.layer2]: the 20 analog keys, numbered
 # key01..key20 matching the number printed on each physical keycap.
@@ -130,14 +130,14 @@ down = "P"
 [middle_click]
 key = "M"
 
-# Hysteresis thresholds on the raw 0-255 analog depth scale (see Purpose.md
+# Hysteresis thresholds on the raw 0-255 analog depth scale (see docs/DESIGN.md
 # §6.1). t_off MUST be strictly less than t_on; an invalid pair falls back
 # to these same built-in defaults for both values together.
 [actuation]
 t_on = 100
 t_off = 80
 
-# LED lighting (see Purpose.md §6④). effect = "none" (the default, also
+# LED lighting (see docs/DESIGN.md §6④). effect = "none" (the default, also
 # used when this whole section is omitted) means "don't touch the LEDs at
 # all" — the device keeps whatever effect/color it already had. Any other
 # effect is (re-)sent once at every driver startup.

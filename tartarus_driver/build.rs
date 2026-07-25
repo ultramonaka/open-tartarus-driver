@@ -13,7 +13,7 @@
 // Hypershift) along with the D-pad/wheel/middle-click remap, even though
 // only the latter actually depends on Interception. That violates this
 // subsystem's fail-open design (see the module doc comment above
-// run_interception_thread in src/main.rs): everything else must keep
+// run_interception_thread in src/dpad.rs): everything else must keep
 // working when Interception is unavailable.
 //
 // /DELAYLOAD defers resolving interception.dll until the first actual call

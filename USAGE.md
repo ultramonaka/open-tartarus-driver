@@ -23,11 +23,11 @@ your-folder\
 ├── interception.dll       ← copy this in yourself (see "Known limitation" in README.md); optional
 ├── config.toml            ← optional; created by configui, or copy config.example.toml and edit it
 ├── config.example.toml
-└── tasks\
+└── logs\
     └── run.log            ← created automatically the first time you run it
 ```
 
-`config.toml` and `tasks\run.log` don't need to exist beforehand — the driver creates/updates them on its own. `interception.dll` is the only one you have to place manually.
+`config.toml` and `logs\run.log` don't need to exist beforehand — the driver creates/updates them on its own. `interception.dll` is the only one you have to place manually.
 
 ### 2. Running the driver
 
@@ -50,7 +50,7 @@ cargo run --release -- tray
 
 - The first line printed (and logged) at startup is always `tartarus_driver vX.Y.Z`, so you can confirm which version you're running (e.g. against the Releases page) without checking the exe's properties.
 - On startup, it automatically sends the init command needed to stream analog data without Synapse.
-- While running, pressing keys logs to stdout (and only to `tasks/run.log` in `tray` mode). The actual disk write happens on its own background thread — logging never adds latency to key presses, D-pad/wheel remapping, or Hypershift, no matter how fast you press. `run.log` is also capped at ~5 MiB (it truncates and keeps going rather than growing forever), since `tray` mode is meant to be left running for days.
+- While running, pressing keys logs to stdout (and only to `logs/run.log` in `tray` mode). The actual disk write happens on its own background thread — logging never adds latency to key presses, D-pad/wheel remapping, or Hypershift, no matter how fast you press. `run.log` is also capped at ~5 MiB (it truncates and keeps going rather than growing forever), since `tray` mode is meant to be left running for days.
 - With no arguments, it runs until Ctrl+C or the console window is closed. Unless force-killed (e.g. via Task Manager), any held key is automatically released on shutdown.
 - **Double-clicking the exe from Explorer runs normal mode (no args)**, so a console window stays open — this is expected. To get `tray` mode instead, either run `tartarus_driver.exe tray` from a terminal, or double-click **`run-tray.bat`** (included in the release zip), which does the same thing.
 
@@ -62,8 +62,8 @@ cargo run --release -- tray
 
 - Detaches the console window at startup (when possible), so it can run in the background.
 - Also starts configui's web server automatically (no need to launch `configui` separately).
-- Right-click the tray icon for a menu: "Open settings (configui)", a grayed-out "Version: vX.Y.Z" line, "Check for updates (GitHub)", and "Quit". "Open settings" opens the browser where you can edit and save key assignments (restarting `tray` mode itself is still needed to apply changes, same as normal mode). "Check for updates" just opens the public repo's Releases page in your browser — there's no automatic update check (no background network calls by design). "Quit" performs the same safe shutdown as Ctrl+C (releasing any held key, etc.) before exiting.
-- No console output — check `tasks/run.log` instead.
+- Right-click the tray icon for a menu: "Open settings (configui)", a grayed-out "Version: vX.Y.Z" line, "Check for updates (GitHub)", and "Quit". "Open settings" opens the browser where you can edit and save key assignments (applied automatically within about a second, same as normal mode — no restart needed). "Check for updates" just opens the public repo's Releases page in your browser — there's no automatic update check (no background network calls by design). "Quit" performs the same safe shutdown as Ctrl+C (releasing any held key, etc.) before exiting.
+- No console output — check `logs/run.log` instead.
 
 #### Debug emulator (`emulate`), no hardware required
 
@@ -106,7 +106,7 @@ The page itself has a language switcher (top right, English/日本語). Switchin
 
 **Notes**:
 - `configui` is not the driver itself — it's only a config editor. It never reads HID data or sends keystrokes.
-- Saving overwrites `config.toml` wholesale. To apply the change, restart the normally-running `tartarus_driver` (step 2) — there's no live auto-reload.
+- Saving overwrites `config.toml` wholesale. If `tartarus_driver` is already running, it picks up the change automatically within about a second — no restart needed.
 - It's easiest to close the config page (Ctrl+C) before running the normal driver (running both at once is harmless — `configui` just waits as a web server — but keeping them separate avoids confusion).
 
 #### Editing `config.toml` directly
@@ -119,7 +119,7 @@ Copy `config.example.toml` to `config.toml` and edit the values. Valid key names
 - D-pad directions: `"LEFT"` / `"UP"` / `"RIGHT"` / `"DOWN"`
 - Others: `"SPACE"` `"ENTER"` `"TAB"` `"ESCAPE"` `"BACKSPACE"` `"LSHIFT"` `"RSHIFT"` `"LCTRL"` `"RCTRL"` `"LALT"` `"RALT"` `"HOME"` `"END"` `"PAGEUP"` `"PAGEDOWN"` `"INSERT"` `"DELETE"`
 
-An unrecognized key name falls back to the built-in default for that one key, with a warning in `tasks/run.log` (the driver never crashes over this).
+An unrecognized key name falls back to the built-in default for that one key, with a warning in `logs/run.log` (the driver never crashes over this).
 
 ### 4. Adjusting sensitivity (actuation point)
 
@@ -140,7 +140,7 @@ reactive_speed = 2       # 1-4, used by reactive
 
 With `effect = "none"` (the default, same as omitting the section), the driver never sends any lighting command, leaving the device's current state untouched (whatever effect was last set is stored on the device itself). Any other value gets (re-)sent once every time the driver starts (no effect on responsiveness — it's sent once or twice at startup, unrelated to the key-input main loop).
 
-**Hardware verification status (2026-07-21)**: `off`/`static`/`spectrum` visually confirmed. `breathing`/`wave`/`reactive` use the same command shape so likely work, but aren't individually confirmed yet. If it doesn't light up as expected, check for a `Lighting: ...` line in `tasks/run.log`, and whether `WARNING: failed to send lighting ...` appears. Per-key individual color control is not implemented.
+**Hardware verification status (2026-07-21)**: `off`/`static`/`spectrum` visually confirmed. `breathing`/`wave`/`reactive` use the same command shape so likely work, but aren't individually confirmed yet. If it doesn't light up as expected, check for a `Lighting: ...` line in `logs/run.log`, and whether `WARNING: failed to send lighting ...` appears. Per-key individual color control is not implemented.
 
 ### 6. Hyper Shift (the "Hyper Response" thumb button)
 
@@ -166,7 +166,7 @@ While a non-Default layer is active, Alt itself is never sent to the OS (the but
 
 ### 7. Anti-cheat-protected games
 
-Some games ignore this driver's input entirely, or refuse to launch while it's running — **confirmed on real hardware**: Valorant (Riot Vanguard) works fine, Apex Legends (Easy Anti-Cheat) does not accept any input from this driver. Administrator privileges don't change this. The cause is intentional anti-cheat behavior, not a bug in this driver: `SendInput` (how this driver, and virtually every remapping/macro tool, sends keystrokes) carries an OS-level "synthetic input" signal that some anti-cheat engines specifically detect and discard; third-party kernel drivers like Interception have also been reported to trigger some engines' launch-block checks. There is no reliable workaround for an EAC-protected title — this is deliberate anti-cheat design (see README's "Known limitation" section for more detail, including an account-risk note). If a specific game doesn't respond to this driver, this is almost certainly why — it's not worth spending time debugging further.
+Some games ignore this driver's input entirely, or refuse to launch while it's running — **confirmed on real hardware**: Valorant (Riot Vanguard) works fine, Apex Legends (Easy Anti-Cheat) does not accept any input from this driver. Administrator privileges don't change this. The cause is intentional anti-cheat behavior, not a bug in this driver: `SendInput` (how this driver, and virtually every remapping/macro tool, sends keystrokes) carries an OS-level "synthetic input" signal that some anti-cheat engines specifically detect and discard; third-party kernel drivers like Interception have also been reported to trigger some engines' launch-block checks. There is no reliable workaround for an EAC-protected title — this is deliberate anti-cheat design (see README's "Known limitation" section for more detail, including an account-risk note). Don't reach for a hardware adapter or virtual-controller-based workaround instead — that's not a safe substitute either, and for some titles it's a bannable-by-policy device regardless of whether it's technically detected (e.g. Apex Legends' Respawn explicitly bans Cronus Zen/Titan Two-class adapters as of March 2026, permanently and without appeal). If a specific game doesn't respond to this driver, this is almost certainly why — it's not worth spending time debugging further.
 
 ### 8. Troubleshooting
 
@@ -175,11 +175,11 @@ Some games ignore this driver's input entirely, or refuse to launch while it's r
 | Analog keys do nothing | Confirm Synapse's GUI is really closed (`Get-Process \| Where ProcessName -match 'Razer\|Synapse'` should show no GUI-looking process). Unplugging/replugging the device can also help |
 | Analog keys work in Notepad/most apps but not in one specific game | Likely that game's anti-cheat blocking synthetic input — see section 7 above. Not fixable from this driver's side |
 | D-pad/wheel still act as native arrow keys/scroll too (double input) | Check the startup log for `WARNING: interception.dll could not be loaded` or `Interception::new() returned None`. The former usually means the kernel driver is installed but `interception.dll` itself wasn't copied next to `tartarus_driver.exe` (step 4 in README's "Known limitation") — this is easy to miss since the kernel driver install alone doesn't produce any error, just this fallback |
-| Saved in `configui` but nothing changed | Confirm you restarted the normal (or `tray`-mode) driver — there's no auto-reload |
-| No tray icon in `tray` mode | Check `tasks/run.log` for `[tray] WARNING: ...` (window class registration / window creation / icon add failure). Right after an Explorer restart, try relaunching `tray` |
-| Some keys in `config.toml` stay at their default | Check `tasks/run.log` for `WARNING: config.toml [...] is not a recognized key name`. See section 3 above for valid key names |
-| A real keyboard/mouse started behaving oddly | Interception/the hook only ever targets the Tartarus Pro's hardware ID (VID 0x1532/PID 0x0244) — fail-open by design. If this still happens, it's a bug; please save `tasks/run.log` for investigation |
-| Lighting was configured but nothing changes | Check `tasks/run.log` for a `Lighting: effect set to "..."` line (if missing, `[lighting]`'s `effect` is still `"none"`, or the config wasn't loaded). A `WARNING: failed to send lighting ...` means the HID write itself failed |
+| Saved in `configui` but nothing changed | Wait ~1s — the running driver picks up `config.toml` changes automatically. Check `logs/run.log` for `config.toml reloaded` (or a `WARNING: ... keeping the previous settings` if the file has a syntax error) |
+| No tray icon in `tray` mode | Check `logs/run.log` for `[tray] WARNING: ...` (window class registration / window creation / icon add failure). Right after an Explorer restart, try relaunching `tray` |
+| Some keys in `config.toml` stay at their default | Check `logs/run.log` for `WARNING: config.toml [...] is not a recognized key name`. See section 3 above for valid key names |
+| A real keyboard/mouse started behaving oddly | Interception/the hook only ever targets the Tartarus Pro's hardware ID (VID 0x1532/PID 0x0244) — fail-open by design. If this still happens, it's a bug; please save `logs/run.log` for investigation |
+| Lighting was configured but nothing changes | Check `logs/run.log` for a `Lighting: effect set to "..."` line (if missing, `[lighting]`'s `effect` is still `"none"`, or the config wasn't loaded). A `WARNING: failed to send lighting ...` means the HID write itself failed |
 
 ---
 
@@ -202,11 +202,11 @@ Some games ignore this driver's input entirely, or refuse to launch while it's r
 ├── interception.dll       ← 手動でコピーする(README.mdの「既知の制約」参照)。任意
 ├── config.toml            ← 任意。configuiで作成するか、config.example.tomlをコピーして編集
 ├── config.example.toml
-└── tasks\
+└── logs\
     └── run.log            ← 初回起動時に自動作成
 ```
 
-`config.toml`と`tasks\run.log`は事前に用意しなくてよい(ドライバが自動で作成・更新する)。手動で用意が必要なのは`interception.dll`だけ。
+`config.toml`と`logs\run.log`は事前に用意しなくてよい(ドライバが自動で作成・更新する)。手動で用意が必要なのは`interception.dll`だけ。
 
 ### 2. ドライバを起動する
 
@@ -229,7 +229,7 @@ cargo run --release -- tray
 
 - 起動時に最初に表示・記録される行は必ず`tartarus_driver vX.Y.Z`なので、exeのプロパティを確認しなくても、今動いているバージョンをReleasesページと照合できる。
 - 起動直後に、Synapseなしでアナログデータを流すための初期化コマンドを自動送信する。
-- 実行中はキーを押すとログが標準出力(`tray`モードでは`tasks/run.log`のみ)に出る。実際のディスク書き込みは専用のバックグラウンドスレッドで行われるため、どれだけ速くキーを押しても、キー入力・十字キー/ホイールのリマップ・Hypershiftの反応速度にログ処理が影響することはない。`run.log`自体も約5MiBで頭出しして書き続ける仕組み(無限に肥大化しない)なので、`tray`モードで何日も動かし続けても問題ない。
+- 実行中はキーを押すとログが標準出力(`tray`モードでは`logs/run.log`のみ)に出る。実際のディスク書き込みは専用のバックグラウンドスレッドで行われるため、どれだけ速くキーを押しても、キー入力・十字キー/ホイールのリマップ・Hypershiftの反応速度にログ処理が影響することはない。`run.log`自体も約5MiBで頭出しして書き続ける仕組み(無限に肥大化しない)なので、`tray`モードで何日も動かし続けても問題ない。
 - 引数なしの場合はCtrl+Cを押すか、コンソール窓を閉じるまで動き続ける。強制終了(タスクマネージャーでの「タスクの終了」など)でない限り、終了時に押しっぱなしのキーがあれば自動的に離す処理が入る。
 - **エクスプローラーからexeをダブルクリックすると、引数なしの通常モードで起動する**ため、コンソール窓が出たままになるのは正常な動作。`tray`モードにしたい場合は、ターミナルから`tartarus_driver.exe tray`を実行するか、リリースzipに同梱されている**`run-tray.bat`**をダブルクリックする(同じ動作をする)。
 
@@ -241,8 +241,8 @@ cargo run --release -- tray
 
 - 起動時にコンソール窓を自動的に切り離す(可能な場合)ので、バックグラウンドで動かせる。
 - 同時に`configui`のWebサーバーも自動で起動している(別途`configui`を起動する必要はない)。
-- タスクトレイのアイコンを右クリックすると「設定を開く (configui)」「バージョン: vX.Y.Z」(グレー表示、クリック不可)「アップデートを確認 (GitHub)」「終了」のメニューが出る。「設定を開く」でブラウザが開き、そのままキー割り当てを編集・保存できる(反映には`tray`モード自体の再起動が必要、通常起動時と同様)。「アップデートを確認」は公開リポジトリのReleasesページをブラウザで開くだけで、自動での更新チェックは行わない(バックグラウンドでの通信は一切しない設計)。「終了」を選ぶと、Ctrl+Cと同じ安全な終了処理(押しっぱなしキーの解放など)を行ってから終了する。
-- ログはコンソールに出ないため`tasks/run.log`を確認する。
+- タスクトレイのアイコンを右クリックすると「設定を開く (configui)」「バージョン: vX.Y.Z」(グレー表示、クリック不可)「アップデートを確認 (GitHub)」「終了」のメニューが出る。「設定を開く」でブラウザが開き、そのままキー割り当てを編集・保存できる(通常起動時と同様、約1秒以内に自動反映される。再起動不要)。「アップデートを確認」は公開リポジトリのReleasesページをブラウザで開くだけで、自動での更新チェックは行わない(バックグラウンドでの通信は一切しない設計)。「終了」を選ぶと、Ctrl+Cと同じ安全な終了処理(押しっぱなしキーの解放など)を行ってから終了する。
+- ログはコンソールに出ないため`logs/run.log`を確認する。
 
 #### デバッグ用エミュレータ (`emulate`)、実機不要
 
@@ -285,7 +285,7 @@ cargo run --release -- configui
 
 **注意点**:
 - `configui`はドライバ本体ではない。設定画面を出すだけで、HID読み取りやキー送信は一切行わない。
-- 保存すると`config.toml`を丸ごと書き換える。反映するには、動かしている通常起動の`tartarus_driver`(手順2)を再起動する必要がある(自動リロードはしない)。
+- 保存すると`config.toml`を丸ごと書き換える。`tartarus_driver`が既に動いている場合、約1秒以内に自動で変更を反映する(再起動は不要)。
 - 設定画面は終了(Ctrl+C)してから、通常起動のドライバを動かす、という順番が分かりやすい(同時に動かしても害はないが、`configui`側は単にWebサーバーとして待機するだけ)。
 
 #### `config.toml`を直接編集する
@@ -298,7 +298,7 @@ cargo run --release -- configui
 - 十字キー用: `"LEFT"` / `"UP"` / `"RIGHT"` / `"DOWN"`
 - その他: `"SPACE"` `"ENTER"` `"TAB"` `"ESCAPE"` `"BACKSPACE"` `"LSHIFT"` `"RSHIFT"` `"LCTRL"` `"RCTRL"` `"LALT"` `"RALT"` `"HOME"` `"END"` `"PAGEUP"` `"PAGEDOWN"` `"INSERT"` `"DELETE"`
 
-存在しないキー名を書いた場合、そのキーだけビルトインの既定値にフォールバックし、`tasks/run.log`に警告が出る(ドライバが落ちることはない)。
+存在しないキー名を書いた場合、そのキーだけビルトインの既定値にフォールバックし、`logs/run.log`に警告が出る(ドライバが落ちることはない)。
 
 ### 4. 感度(アクチュエーションポイント)を変える
 
@@ -319,7 +319,7 @@ reactive_speed = 2       # 1-4、reactiveで使用
 
 `effect = "none"`(既定・セクション省略時も同じ)の場合、ドライバはライティングコマンドを一切送信せず、デバイス側の現在の状態(前回設定した効果は本体に保存されている)をそのまま維持する。それ以外を指定すると、ドライバ起動時に毎回そのコマンドを送信する(反応速度への影響なし — 起動時に1〜2回送るだけで、キー入力のメインループとは無関係)。
 
-**実機検証状況(2026-07-21)**: `off`/`static`/`spectrum`は目視確認済み。`breathing`/`wave`/`reactive`は同じコマンド形状のため動作する可能性が高いが未個別確認。期待通りに光らない場合は`tasks/run.log`の`Lighting: ...`行、および`WARNING: failed to send lighting ...`が出ていないか確認。per-key単位で1キーずつ違う色を指定する機能は未実装。
+**実機検証状況(2026-07-21)**: `off`/`static`/`spectrum`は目視確認済み。`breathing`/`wave`/`reactive`は同じコマンド形状のため動作する可能性が高いが未個別確認。期待通りに光らない場合は`logs/run.log`の`Lighting: ...`行、および`WARNING: failed to send lighting ...`が出ていないか確認。per-key単位で1キーずつ違う色を指定する機能は未実装。
 
 ### 6. ハイパーシフト(「Hyper Response」ボタン)
 
@@ -345,7 +345,7 @@ reactive_speed = 2       # 1-4、reactiveで使用
 
 ### 7. アンチチート導入済みのゲームについて
 
-一部のゲームでは本ドライバの入力が全く効かない、またはドライバを動かしたままだとゲーム自体が起動しないことがある — **実機で確認済み**: Valorant(Riot Vanguard)は問題なく動作するが、Apex Legends(Easy Anti-Cheat)は本ドライバからの入力を一切受け付けない。管理者権限にしても変わらない。これは本ドライバの不具合ではなく、意図的なアンチチートの仕様: `SendInput`(本ドライバ、および事実上全てのリマップ/マクロツールが使うキー送信の仕組み)にはOSレベルで「合成された入力」であることを示す情報が付随しており、一部のアンチチートエンジンはこれを検知して意図的に無視する。Interceptionのようなサードパーティ製カーネルドライバ自体が、一部のエンジンの起動ブロック判定のトリガーになったという報告もある。EAC保護下のタイトルに対する確実な回避策は無い(意図的なアンチチート設計のため。詳細とアカウントリスクについての注意はREADME.mdの「既知の制約」参照)。特定のゲームだけ本ドライバに反応しない場合、ほぼ確実にこれが原因であり、それ以上デバッグしても解決しない。
+一部のゲームでは本ドライバの入力が全く効かない、またはドライバを動かしたままだとゲーム自体が起動しないことがある — **実機で確認済み**: Valorant(Riot Vanguard)は問題なく動作するが、Apex Legends(Easy Anti-Cheat)は本ドライバからの入力を一切受け付けない。管理者権限にしても変わらない。これは本ドライバの不具合ではなく、意図的なアンチチートの仕様: `SendInput`(本ドライバ、および事実上全てのリマップ/マクロツールが使うキー送信の仕組み)にはOSレベルで「合成された入力」であることを示す情報が付随しており、一部のアンチチートエンジンはこれを検知して意図的に無視する。Interceptionのようなサードパーティ製カーネルドライバ自体が、一部のエンジンの起動ブロック判定のトリガーになったという報告もある。EAC保護下のタイトルに対する確実な回避策は無い(意図的なアンチチート設計のため。詳細とアカウントリスクについての注意はREADME.mdの「既知の制約」参照)。ハードウェア変換アダプタや仮想コントローラー方式への切り替えも安全な代替にはならない — 技術的に検知されるかどうかとは別に、一部のタイトルでは検知有無を問わずポリシーとしてこの種のデバイスを禁止している(例: Apex LegendsはRespawnが2026年3月よりCronus Zen/Titan Two系アダプタを恒久・異議申し立て不可のBAN対象と明言)。特定のゲームだけ本ドライバに反応しない場合、ほぼ確実にこれが原因であり、それ以上デバッグしても解決しない。
 
 ### 8. トラブルシューティング
 
@@ -354,9 +354,9 @@ reactive_speed = 2       # 1-4、reactiveで使用
 | アナログキーが何も反応しない | Synapseのタスクトレイアイコンが本当に閉じているか確認(`Get-Process \| Where ProcessName -match 'Razer\|Synapse'`でGUIプロセスが出ないこと)。デバイスの抜き差しも有効な場合がある |
 | メモ帳など大抵のアプリでは動くが特定のゲームだけ反応しない | そのゲームのアンチチートが合成入力をブロックしている可能性が高い — 上記7を参照。本ドライバ側での解決策は無い |
 | 十字キー/ホイールが元の矢印キー・スクロールとしても動いてしまう(二重入力) | 起動時ログに`WARNING: interception.dll could not be loaded`または`Interception::new() returned None`と出ていないか確認。前者は多くの場合、カーネルドライバは入っているが`interception.dll`自体が`tartarus_driver.exe`と同じフォルダにコピーされていない状態(README「既知の制約」の手順4)。カーネルドライバのインストールだけではエラーが出ないため見落としやすい |
-| `configui`で保存したのに反映されない | 通常起動(または`tray`モード)のドライバを再起動したか確認(自動リロードはしない) |
-| `tray`モードでタスクトレイにアイコンが出ない | `tasks/run.log`に`[tray] WARNING: ...`が出ていないか確認(ウィンドウクラス登録・ウィンドウ作成・アイコン追加のいずれかの失敗)。Explorerの再起動直後などは再度`tray`を起動し直す |
-| `config.toml`の一部のキーだけ既定値のままになる | `tasks/run.log`に`WARNING: config.toml [...] は認識できないキー名です`が出ていないか確認。使えるキー名の一覧は本ファイルの3節を参照 |
-| 実キーボード/実マウスの動きが変になった | Interception/フックはTartarus Pro(VID 0x1532/PID 0x0244)のハードウェアID一致だけを対象にしている(fail-open設計)。それでも問題が起きた場合はバグなので、`tasks/run.log`を保存して調査する |
-| ライティングを設定したのに光り方が変わらない | `tasks/run.log`に`Lighting: effect set to "..."`が出ているか確認(出ていなければ`[lighting]`の`effect`が`"none"`のまま、または設定が読み込まれていない)。`WARNING: failed to send lighting ...`が出ていればHID書き込み自体が失敗している |
+| `configui`で保存したのに反映されない | 約1秒待つ — 動作中のドライバは`config.toml`の変更を自動で拾う。`logs/run.log`に`config.toml reloaded`(構文エラーがある場合は`WARNING: ... keeping the previous settings`)が出ているか確認 |
+| `tray`モードでタスクトレイにアイコンが出ない | `logs/run.log`に`[tray] WARNING: ...`が出ていないか確認(ウィンドウクラス登録・ウィンドウ作成・アイコン追加のいずれかの失敗)。Explorerの再起動直後などは再度`tray`を起動し直す |
+| `config.toml`の一部のキーだけ既定値のままになる | `logs/run.log`に`WARNING: config.toml [...] は認識できないキー名です`が出ていないか確認。使えるキー名の一覧は本ファイルの3節を参照 |
+| 実キーボード/実マウスの動きが変になった | Interception/フックはTartarus Pro(VID 0x1532/PID 0x0244)のハードウェアID一致だけを対象にしている(fail-open設計)。それでも問題が起きた場合はバグなので、`logs/run.log`を保存して調査する |
+| ライティングを設定したのに光り方が変わらない | `logs/run.log`に`Lighting: effect set to "..."`が出ているか確認(出ていなければ`[lighting]`の`effect`が`"none"`のまま、または設定が読み込まれていない)。`WARNING: failed to send lighting ...`が出ていればHID書き込み自体が失敗している |
 

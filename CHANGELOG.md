@@ -7,9 +7,17 @@
 <a name="english"></a>
 ## English
 
+### v1.0.6
+
+- **Added**: `config.toml` hot-reload. A running `tartarus_driver` (normal or `tray` mode) now picks up changes saved via `configui` or made by hand within about a second — no restart needed. A missing or broken `config.toml` never resets you to hardcoded defaults; it keeps your last-known-good settings running and self-heals once the file is fixed. Verified on real hardware.
+- **Changed**: the runtime log folder next to `tartarus_driver.exe` is now `logs\run.log` (was `tasks\run.log`) — same auto-created, auto-capped file, just a clearer name.
+- **Added**: `configui`'s page now shows the running driver's version next to its title.
+- **Added**: `research.md` — a write-up of the protocol reverse-engineering behind this driver (analog keys, the Synapse-free streaming handshake, RGB lighting, the still-unresolved profile-indicator LEDs) and the anti-cheat investigation from v1.0.5.1, for anyone curious how it works under the hood. Linked from README's "Documentation map"; not required reading to use the driver.
+
 ### v1.0.5.1
 
 - **Documented**: anti-cheat-protected games may ignore this driver's input or refuse to launch while it's running (confirmed: Valorant/Vanguard works, Apex Legends/Easy Anti-Cheat does not, admin privileges don't change this) — added to README's "Known limitation" section and a new USAGE.md section, with an account-risk note. Docs-only patch release.
+- **Documented (follow-up)**: no safe alternative was found either — switching to a virtual-controller-based output was tested and blocked the same as regular keyboard input, and hardware input adapters (Cronus Zen/Titan Two-class devices) aren't a safe substitute regardless of detection, since some publishers now ban that device class outright by policy (e.g. Apex Legends' Respawn, as of March 2026, permanently and without appeal). Added to the same README/USAGE sections.
 
 ### v1.0.5
 
@@ -48,9 +56,17 @@ Initial public release.
 <a name="japanese"></a>
 ## 日本語
 
+### v1.0.6
+
+- **追加**: `config.toml`のホットリロード。動作中の`tartarus_driver`(通常起動/`tray`モードとも)は、`configui`での保存や手動編集による変更を約1秒以内に自動で反映する(再起動不要)。`config.toml`が見つからない・壊れている場合でもハードコードされた既定値には戻らず、直前の正常な設定のまま動作を継続し、ファイルが修正され次第自動的に復帰する。実機検証済み。
+- **変更**: `tartarus_driver.exe`の隣に作られる実行時ログのフォルダ名を`tasks\run.log`から`logs\run.log`に変更(中身・自動生成・自動キャップの挙動はそのまま、名前だけ分かりやすく)。
+- **追加**: `configui`のページにも、動作中のドライバのバージョンをタイトル横に表示するようにした。
+- **追加**: `research.md` — 本ドライバのプロトコルリバースエンジニアリング記録(アナログキー・Synapse不要のストリーミング有効化ハンドシェイク・RGBライティング・未解決のプロファイルインジケータLED)と、v1.0.5.1のアンチチート調査をまとめたドキュメント。内部の仕組みに興味がある方向け。READMEの「ドキュメント構成」からリンク、使うだけなら読む必要はない。
+
 ### v1.0.5.1
 
 - **ドキュメント追加**: アンチチート導入済みのゲームでは本ドライバの入力が無視される、またはゲーム自体が起動しないことがある旨を明記(実機確認: Valorant/Vanguardは動作するが、Apex Legends/Easy Anti-Cheatは動作せず、管理者権限でも変わらない)。README「既知の制約」節とUSAGE.mdの新設セクションに、アカウント停止リスクの注意とあわせて追記。ドキュメントのみのパッチリリース。
+- **ドキュメント追加(続報)**: 安全な代替策も見つからなかった — 仮想コントローラー方式の出力もテストしたが通常のキーボード入力と同様にブロックされ、ハードウェア入力アダプタ(Cronus Zen/Titan Two等)も検知の有無にかかわらず安全な代替にはならない(一部パブリッシャーはこの種のデバイスを検知有無を問わずポリシーとして禁止しており、例えばApex LegendsはRespawnが2026年3月より恒久・異議申し立て不可でBANすると明言)。同じREADME/USAGEの節に追記。
 
 ### v1.0.5
 

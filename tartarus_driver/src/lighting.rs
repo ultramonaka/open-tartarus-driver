@@ -3,8 +3,7 @@
 // channel already used for the device-mode-3 analog-streaming unlock.
 // Protocol details are from a research pass over OpenRazer's driver source
 // (driver/razerchromacommon.c, razerkbd_driver.c, PR #2336/#2710) — see
-// tasks/research/2026-07-20_tartarus_pro_rgb_lighting_protocol.md for the
-// full write-up and citations. NOT yet confirmed against real hardware by
+// docs/research_internal.md §4 for the full write-up and citations. NOT yet confirmed against real hardware by
 // us directly (unlike everything else in this driver) — this is the first
 // use of command_class 0x0f in this codebase.
 //
@@ -136,18 +135,19 @@ pub fn apply(ctrl: &hidapi::HidDevice, lighting: &LightingConfig) {
 // the matrix's 0x0f), so toggling one never disrupts whatever main effect
 // (static/spectrum/breathing/etc.) is currently running. Used here to give
 // Hypershift a hardware status light: on while Layer1 is active, off for
-// Default. Research: tasks/research/2026-07-21_tartarus_pro_profile_indicator_led_protocol.md.
+// Default. Research: docs/research_internal.md §5.
 //
 // OpenRazer itself has never implemented these specifically for the
 // Tartarus Pro (its own merged PR left them as "will be added later"), so
 // unlike the matrix effects, this protocol is NOT independently confirmed
 // for this exact product — only for sibling devices (Tartarus Chroma/V2,
-// Orbweaver). Two things in particular need real-hardware confirmation:
-//   - transaction_id: sibling devices use 0xFF for this command family
-//     (distinct from the matrix effects' Tartarus-Pro-specific 0x1f) — try
-//     0xFF first; if the LED never lights, 0x1f is the fallback to try.
-//   - Whether the LED IDs/command shape below are unchanged on this device
-//     at all (plausible but unverified).
+// Orbweaver). Real-hardware testing (docs/research_internal.md §5.6) tried
+// both plausible transaction_id values — sibling devices' 0xFF, and the
+// matrix effects' Tartarus-Pro-specific 0x1f (current value below) — and
+// the command completes without error either way, but the LED never
+// visibly lights with either one. Whether this device even has this side
+// LED wired up at all is unconfirmed. Parked per DESIGN.md §6⑥; this code
+// is harmless (opt-in, default off) and left in place rather than removed.
 const LAYER_INDICATOR_TXN: u8 = 0x1f;
 const CLASS_STANDARD_LED: u8 = 0x03;
 const CMD_SET_LED_STATE: u8 = 0x00;
