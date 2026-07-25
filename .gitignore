@@ -29,3 +29,4 @@
 
 # Output of scripts/make-public-release-zip.ps1
 /dist/
+tartarus_driver/.vscode/
