@@ -7,6 +7,10 @@
 <a name="english"></a>
 ## English
 
+### v1.0.7
+
+- **Fixed**: mapping a key to `LSHIFT`/`RSHIFT`/`LCTRL`/`RCTRL`/`LALT`/`RALT` could be misread by games that read raw scan codes instead of virtual-key codes — confirmed on real hardware: `LSHIFT` arrived in Valorant as `RSHIFT`, and `RSHIFT` didn't register at all. These six keys now send the correct hardware scan code explicitly instead of relying on Windows' own (unreliable, for this specific left/right pair) translation. Every other key is unaffected.
+
 ### v1.0.6
 
 - **Added**: `config.toml` hot-reload. A running `tartarus_driver` (normal or `tray` mode) now picks up changes saved via `configui` or made by hand within about a second — no restart needed. A missing or broken `config.toml` never resets you to hardcoded defaults; it keeps your last-known-good settings running and self-heals once the file is fixed. Verified on real hardware.
@@ -55,6 +59,10 @@ Initial public release.
 
 <a name="japanese"></a>
 ## 日本語
+
+### v1.0.7
+
+- **修正**: `LSHIFT`/`RSHIFT`/`LCTRL`/`RCTRL`/`LALT`/`RALT`を割り当てたキーが、仮想キーコードではなく生のスキャンコードを見るタイプのゲームで誤認識されることがあった問題を修正。実機で確認済み: `LSHIFT`を送るとValorant側では`RSHIFT`として認識され、`RSHIFT`は全く認識されなかった。この6キーだけ、Windows側の変換に頼らず正しいハードウェアスキャンコードを明示的に送信するように変更。それ以外のキーへの影響はない。
 
 ### v1.0.6
 

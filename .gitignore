@@ -9,18 +9,21 @@
 # Rust build artifacts
 /tartarus_driver/target
 
-# tasks/ dev-only working notes: reverse-engineering research write-ups,
-# raw USB/HID capture logs, ad-hoc test transcripts, and the self-generated
-# run.log. Kept locally for reference but deliberately not published.
-# TASKS.md itself is tracked (see the negation below) since it's the
-# actively-maintained task tracker, not disposable working notes — also
-# excluded from the public release separately, see
-# scripts/make-public-release-zip.ps1's $ExcludeFromPublic.
-/tasks/*
-!/tasks/TASKS.md
+# logs/ holds only the self-generated run.log (created on first launch,
+# capped at ~5MiB, never meant to be committed). The task tracker
+# (TASKS.md) and research write-ups/evidence live under docs/ instead,
+# which is tracked normally and excluded from the public release as a
+# whole — see scripts/make-public-release-zip.ps1's $ExcludeFromPublic.
+/logs/*
 
 # Extracted Interception.zip (downloaded driver installer, not project source)
 /Interception/
+
+# interception.dll copied next to a locally-built exe for manual testing
+# (target/release, target/debug, or here at the crate root) — deliberately
+# not bundled/committed, a licensing choice (see Cargo.toml's comment on
+# the `interception` dependency).
+interception.dll
 
 # Personal key remap config, generated/edited via `configui` — everyone's
 # actual layout will differ, so this is a per-machine file, not project
@@ -29,4 +32,3 @@
 
 # Output of scripts/make-public-release-zip.ps1
 /dist/
-tartarus_driver/.vscode/
